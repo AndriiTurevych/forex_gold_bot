@@ -3,6 +3,7 @@ name: Tester Trust Gate
 on:
   pull_request:
     paths:
+      - 'gold_cio_v9/__init__.py'
       - 'gold_cio_v9/validation/**'
       - 'gold_cio_v9/backtest/**'
       - 'gold_cio_v9/features/**'
@@ -14,6 +15,7 @@ on:
     branches:
       - gold-cio-v9
     paths:
+      - 'gold_cio_v9/__init__.py'
       - 'gold_cio_v9/validation/**'
       - 'gold_cio_v9/backtest/**'
       - 'gold_cio_v9/features/**'
@@ -21,11 +23,15 @@ on:
       - 'gold_cio_v9/config/tester_trust_gate.yaml'
       - 'gold_cio_v9/tests/**'
       - '.github/workflows/tester-trust-gate.yml'
+  workflow_dispatch:
 
 jobs:
   trust-gate:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONHASHSEED: '1729'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -38,22 +44,22 @@ jobs:
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pyyaml numpy
+          python -m pip install pytest pyyaml numpy
 
       - name: Test 4 - Known-answer synthetic verdicts
-        run: pytest -q gold_cio_v9/tests/trust/test_known_answer.py
+        run: python -m pytest -q gold_cio_v9/tests/trust/test_known_answer.py
 
       - name: Test 1 - Leakage detection and purge integrity
-        run: pytest -q gold_cio_v9/tests/trust/test_leakage.py
+        run: python -m pytest -q gold_cio_v9/tests/trust/test_leakage.py
 
       - name: Test 2 - Deterministic replay
-        run: pytest -q gold_cio_v9/tests/trust/test_determinism.py
+        run: python -m pytest -q gold_cio_v9/tests/trust/test_determinism.py
 
       - name: Test 3 - Trials registry completeness
-        run: pytest -q gold_cio_v9/tests/trust/test_trials_registry.py
+        run: python -m pytest -q gold_cio_v9/tests/trust/test_trials_registry.py
 
       - name: Test 5 - Config immutability
-        run: pytest -q gold_cio_v9/tests/trust/test_config_immutability.py
+        run: python -m pytest -q gold_cio_v9/tests/trust/test_config_immutability.py
 
       - name: Trust gate summary
         if: success()
