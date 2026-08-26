@@ -1,0 +1,32 @@
+version: 1
+status: locked
+random_seed: 1729
+purged_cv:
+  folds: 6
+  embargo:
+    rule: max_label_horizon_plus_sample_pct
+    sample_pct: 0.01
+costs:
+  base_mode: realistic
+  stress_multiple: 1.5
+acceptance:
+  net_oos_expectancy_min_exclusive: 0.0
+  profit_factor_min: 1.30
+  independent_oos_setups_min: 200
+  pbo_max_exclusive: 0.20
+  dsr_significance_alpha: 0.05
+  require_positive_1_5x_cost_expectancy: true
+  require_positive_untouched_holdout: true
+trust_gate:
+  required_tests:
+    - known_answer_noise_reject
+    - known_answer_edge_accept
+    - synthetic_pit_leak_rejected
+    - synthetic_label_overlap_purged
+    - deterministic_replay_hash_match
+    - trials_registry_complete
+    - runtime_override_rejected
+policy:
+  runtime_overrides_allowed: false
+  dirty_worktree_runs_allowed: false
+  exp0001_before_trust_gate: diagnostic_only
