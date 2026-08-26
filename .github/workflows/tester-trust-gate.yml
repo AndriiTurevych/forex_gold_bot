@@ -7,6 +7,7 @@ on:
       - 'gold_cio_v9/validation/**'
       - 'gold_cio_v9/backtest/**'
       - 'gold_cio_v9/features/**'
+      - 'gold_cio_v9/ict_engine/**'
       - 'gold_cio_v9/labels/**'
       - 'gold_cio_v9/config/tester_trust_gate.yaml'
       - 'gold_cio_v9/tests/**'
@@ -19,6 +20,7 @@ on:
       - 'gold_cio_v9/validation/**'
       - 'gold_cio_v9/backtest/**'
       - 'gold_cio_v9/features/**'
+      - 'gold_cio_v9/ict_engine/**'
       - 'gold_cio_v9/labels/**'
       - 'gold_cio_v9/config/tester_trust_gate.yaml'
       - 'gold_cio_v9/tests/**'
@@ -49,8 +51,11 @@ jobs:
       - name: Test 4 - Known-answer synthetic verdicts
         run: python -m pytest -q gold_cio_v9/tests/trust/test_known_answer.py
 
-      - name: Test 1 - Leakage detection and purge integrity
+      - name: Test 1A - Explicit leakage and purge integrity
         run: python -m pytest -q gold_cio_v9/tests/trust/test_leakage.py
+
+      - name: Test 1B - ICT confirmation-delay and state-revision leakage
+        run: python -m pytest -q gold_cio_v9/tests/trust/test_ict_confirmation_leakage.py
 
       - name: Test 2 - Deterministic replay
         run: python -m pytest -q gold_cio_v9/tests/trust/test_determinism.py
