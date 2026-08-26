@@ -6,7 +6,8 @@ from gold_cio_v9.backtest.costs import CostAssumptions, net_pnl_price, round_tri
 from gold_cio_v9.features.store import FeatureRow, PointInTimeFeatureStore
 from gold_cio_v9.ict_engine.features import Bar, detect_liquidity_sweep
 from gold_cio_v9.ict_engine.sessions import SessionWindow, session_liquidity
-from gold_cio_v9.labels.outcomes import label_long
+from gold_cio_v9.ict_engine.structure import detect_structure_break
+from gold_cio_v9.labels.outcomes import label_long, label_short
 from gold_cio_v9.risk.gate import RiskState, evaluate
 
 
@@ -88,3 +89,42 @@ def test_label_marks_same_bar_target_and_stop_as_ambiguous():
 def test_label_rejects_malformed_future_bar():
     with pytest.raises(ValueError):
         label_long(100.0, 99.0, 102.0, [(99.0, 101.0, 100.0)])
+
+
+def test_long_excursions_stop_at_trade_exit():
+    label = label_long(
+        100.0,
+        99.0,
+        102.0,
+        [
+            (100.4, 98.8, 99.2),  # stop exits here
+            (110.0, 100.0, 109.0),  # must not inflate MFE after exit
+        ],
+    )
+    assert label.first_touch == "STOP"
+    assert label.bars_to_first_touch == 1
+    assert label.mfe_r == pytest.approx(0.4)
+    assert label.mae_r == pytest.approx(1.2)
+
+
+def test_short_excursions_stop_at_trade_exit():
+    label = label_short(
+        100.0,
+        101.0,
+        98.0,
+        [
+            (101.2, 99.6, 100.8),  # stop exits here
+            (100.0, 90.0, 91.0),  # must not inflate MFE after exit
+        ],
+    )
+    assert label.first_touch == "STOP"
+    assert label.bars_to_first_touch == 1
+    assert label.mfe_r == pytest.approx(0.4)
+    assert label.mae_r == pytest.approx(1.2)
+
+
+def test_structure_engine_fails_closed_on_nan_and_bad_geometry():
+    with pytest.raises(ValueError):
+        detect_structure_break(float("nan"), 101.0, 99.0, "BULLISH", 1.0)
+    with pytest.raises(ValueError):
+        detect_structure_break(100.0, 99.0, 101.0, "BULLISH", 1.0)
