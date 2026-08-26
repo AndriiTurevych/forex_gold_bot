@@ -2,11 +2,14 @@
 
 All timestamps must be timezone-aware before entering this module.
 Session windows are configurable research definitions, not claims of canonical ICT rules.
+When a timezone_name is configured, timestamps are converted into that IANA timezone
+before session membership is evaluated, making DST transitions explicit and reproducible.
 """
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from math import isfinite
 from typing import Iterable, Optional
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
 @dataclass(frozen=True)
@@ -14,6 +17,16 @@ class SessionWindow:
     name: str
     start: time
     end: time
+    timezone_name: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.start.tzinfo is not None or self.end.tzinfo is not None:
+            raise ValueError("session start/end must be naive wall-clock times")
+        if self.timezone_name is not None:
+            try:
+                ZoneInfo(self.timezone_name)
+            except ZoneInfoNotFoundError as exc:
+                raise ValueError(f"unknown session timezone: {self.timezone_name}") from exc
 
 
 @dataclass(frozen=True)
@@ -31,9 +44,16 @@ def _require_aware(ts: datetime) -> None:
         raise ValueError("session timestamps must be timezone-aware")
 
 
-def in_window(ts: datetime, window: SessionWindow) -> bool:
+def _as_session_time(ts: datetime, window: SessionWindow) -> datetime:
     _require_aware(ts)
-    t = ts.timetz().replace(tzinfo=None)
+    if window.timezone_name is None:
+        return ts
+    return ts.astimezone(ZoneInfo(window.timezone_name))
+
+
+def in_window(ts: datetime, window: SessionWindow) -> bool:
+    local_ts = _as_session_time(ts, window)
+    t = local_ts.timetz().replace(tzinfo=None)
     if window.start <= window.end:
         return window.start <= t < window.end
     return t >= window.start or t < window.end
@@ -41,12 +61,13 @@ def in_window(ts: datetime, window: SessionWindow) -> bool:
 
 def _belongs_to_session_date(ts: datetime, window: SessionWindow, session_date: date) -> bool:
     """Treat session_date as the date on which the configured session starts."""
-    t = ts.timetz().replace(tzinfo=None)
+    local_ts = _as_session_time(ts, window)
+    t = local_ts.timetz().replace(tzinfo=None)
     if window.start <= window.end:
-        return ts.date() == session_date and window.start <= t < window.end
-    if ts.date() == session_date:
+        return local_ts.date() == session_date and window.start <= t < window.end
+    if local_ts.date() == session_date:
         return t >= window.start
-    if ts.date() == session_date + timedelta(days=1):
+    if local_ts.date() == session_date + timedelta(days=1):
         return t < window.end
     return False
 
@@ -73,8 +94,10 @@ def session_liquidity(
     return SessionLiquidity(window.name, session_date, high_row[1], low_row[2], high_row[0], low_row[0])
 
 
-# Research defaults expressed in the timezone of incoming data.
-# Production adapters must convert source timestamps to an explicitly configured session timezone.
+# Research defaults remain expressed in the timezone of incoming data because the
+# exact session convention is experiment-specific. Production/research adapters
+# should set timezone_name explicitly on configured windows (e.g. America/New_York)
+# whenever wall-clock session semantics are required.
 DEFAULT_WINDOWS = {
     "ASIA": SessionWindow("ASIA", time(0, 0), time(6, 0)),
     "LONDON": SessionWindow("LONDON", time(7, 0), time(10, 0)),
