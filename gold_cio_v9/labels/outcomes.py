@@ -34,28 +34,47 @@ def _materialize_bars(future_bars: Iterable[tuple[float, float, float]]) -> list
     return bars
 
 
+def _exit_index_long(
+    bars: list[tuple[float, float, float]], stop: float, target: float
+) -> tuple[str, int | None]:
+    for idx, (high, low, _close) in enumerate(bars, start=1):
+        hit_target = high >= target
+        hit_stop = low <= stop
+        if hit_target or hit_stop:
+            if hit_target and hit_stop:
+                return "AMBIGUOUS", idx
+            return ("TARGET" if hit_target else "STOP"), idx
+    return "NONE", None
+
+
+def _exit_index_short(
+    bars: list[tuple[float, float, float]], stop: float, target: float
+) -> tuple[str, int | None]:
+    for idx, (high, low, _close) in enumerate(bars, start=1):
+        hit_target = low <= target
+        hit_stop = high >= stop
+        if hit_target or hit_stop:
+            if hit_target and hit_stop:
+                return "AMBIGUOUS", idx
+            return ("TARGET" if hit_target else "STOP"), idx
+    return "NONE", None
+
+
 def label_long(entry: float, stop: float, target: float, future_bars: Iterable[tuple[float, float, float]]) -> OutcomeLabel:
     _validate_geometry(entry, stop, target)
     risk = entry - stop
     if risk <= 0 or target <= entry:
         raise ValueError("invalid long geometry")
     bars = _materialize_bars(future_bars)
-    max_high = max([entry] + [b[0] for b in bars])
-    min_low = min([entry] + [b[1] for b in bars])
-    first_touch = "NONE"
-    touch_bar = None
-    last_close = bars[-1][2] if bars else entry
+    first_touch, touch_bar = _exit_index_long(bars, stop, target)
 
-    for idx, (high, low, _close) in enumerate(bars, start=1):
-        hit_target = high >= target
-        hit_stop = low <= stop
-        if hit_target or hit_stop:
-            touch_bar = idx
-            if hit_target and hit_stop:
-                first_touch = "AMBIGUOUS"
-            else:
-                first_touch = "TARGET" if hit_target else "STOP"
-            break
+    # MFE/MAE are trade-path excursions, so observations after a deterministic
+    # target/stop exit must not influence the label. For an ambiguous OHLC bar,
+    # include that bar but never use subsequent bars.
+    observed = bars[:touch_bar] if touch_bar is not None else bars
+    max_high = max([entry] + [b[0] for b in observed])
+    min_low = min([entry] + [b[1] for b in observed])
+    last_close = bars[-1][2] if bars else entry
 
     mfe = (max_high - entry) / risk
     mae = (entry - min_low) / risk
@@ -76,22 +95,12 @@ def label_short(entry: float, stop: float, target: float, future_bars: Iterable[
     if risk <= 0 or target >= entry:
         raise ValueError("invalid short geometry")
     bars = _materialize_bars(future_bars)
-    max_high = max([entry] + [b[0] for b in bars])
-    min_low = min([entry] + [b[1] for b in bars])
-    first_touch = "NONE"
-    touch_bar = None
-    last_close = bars[-1][2] if bars else entry
+    first_touch, touch_bar = _exit_index_short(bars, stop, target)
 
-    for idx, (high, low, _close) in enumerate(bars, start=1):
-        hit_target = low <= target
-        hit_stop = high >= stop
-        if hit_target or hit_stop:
-            touch_bar = idx
-            if hit_target and hit_stop:
-                first_touch = "AMBIGUOUS"
-            else:
-                first_touch = "TARGET" if hit_target else "STOP"
-            break
+    observed = bars[:touch_bar] if touch_bar is not None else bars
+    max_high = max([entry] + [b[0] for b in observed])
+    min_low = min([entry] + [b[1] for b in observed])
+    last_close = bars[-1][2] if bars else entry
 
     mfe = (entry - min_low) / risk
     mae = (max_high - entry) / risk
