@@ -10,7 +10,7 @@ from gold_cio_v9.ict_engine.features import (
     detect_liquidity_sweep,
     displacement_atr,
 )
-from gold_cio_v9.ict_engine.sessions import SessionWindow, in_window, session_liquidity
+from gold_cio_v9.ict_engine.sessions import DEFAULT_WINDOWS, SessionWindow, in_window, session_liquidity
 from gold_cio_v9.ict_engine.structure import detect_structure_break
 from gold_cio_v9.labels.outcomes import label_long, label_short
 from gold_cio_v9.risk.gate import RiskState, evaluate
@@ -131,6 +131,14 @@ def test_session_timezone_handles_new_york_dst_without_fixed_utc_offset():
     assert in_window(summer, window)
     assert in_window(winter, window)
     assert not in_window(datetime(2026, 7, 15, 12, 0, tzinfo=timezone.utc), window)
+
+
+def test_default_session_windows_are_feed_timezone_independent():
+    # The same instant, represented in different offsets, must classify identically.
+    instant_utc = datetime(2026, 8, 26, 14, 0, tzinfo=timezone.utc)
+    instant_plus_two = instant_utc.astimezone(timezone(timedelta(hours=2)))
+    assert in_window(instant_utc, DEFAULT_WINDOWS["NY_AM"])
+    assert in_window(instant_plus_two, DEFAULT_WINDOWS["NY_AM"])
 
 
 def test_label_marks_same_bar_target_and_stop_as_ambiguous():
