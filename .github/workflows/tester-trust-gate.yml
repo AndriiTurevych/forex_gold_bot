@@ -9,6 +9,7 @@ on:
       - 'gold_cio_v9/features/**'
       - 'gold_cio_v9/ict_engine/**'
       - 'gold_cio_v9/labels/**'
+      - 'gold_cio_v9/experiments/**'
       - 'gold_cio_v9/config/tester_trust_gate.yaml'
       - 'gold_cio_v9/tests/**'
       - '.github/workflows/tester-trust-gate.yml'
@@ -22,6 +23,7 @@ on:
       - 'gold_cio_v9/features/**'
       - 'gold_cio_v9/ict_engine/**'
       - 'gold_cio_v9/labels/**'
+      - 'gold_cio_v9/experiments/**'
       - 'gold_cio_v9/config/tester_trust_gate.yaml'
       - 'gold_cio_v9/tests/**'
       - '.github/workflows/tester-trust-gate.yml'
@@ -65,6 +67,9 @@ jobs:
 
       - name: Test 5 - Config immutability
         run: python -m pytest -q gold_cio_v9/tests/trust/test_config_immutability.py
+
+      - name: Test 6 - Preregistration immutability and instrument scope
+        run: python -m pytest -q gold_cio_v9/tests/trust/test_preregistration_immutability.py
 
       - name: Trust gate summary
         if: success()
