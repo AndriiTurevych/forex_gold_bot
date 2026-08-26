@@ -4,7 +4,8 @@ All timestamps must be timezone-aware before entering this module.
 Session windows are configurable research definitions, not claims of canonical ICT rules.
 """
 from dataclasses import dataclass
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
+from math import isfinite
 from typing import Iterable, Optional
 
 
@@ -38,16 +39,32 @@ def in_window(ts: datetime, window: SessionWindow) -> bool:
     return t >= window.start or t < window.end
 
 
+def _belongs_to_session_date(ts: datetime, window: SessionWindow, session_date: date) -> bool:
+    """Treat session_date as the date on which the configured session starts."""
+    t = ts.timetz().replace(tzinfo=None)
+    if window.start <= window.end:
+        return ts.date() == session_date and window.start <= t < window.end
+    if ts.date() == session_date:
+        return t >= window.start
+    if ts.date() == session_date + timedelta(days=1):
+        return t < window.end
+    return False
+
+
 def session_liquidity(
     rows: Iterable[tuple[datetime, float, float]],
     window: SessionWindow,
     session_date: date,
 ) -> Optional[SessionLiquidity]:
-    """Calculate one session's high/low without leaking observations from other dates."""
+    """Calculate one session's high/low without leaking observations from other sessions."""
     selected: list[tuple[datetime, float, float]] = []
     for ts, high, low in rows:
         _require_aware(ts)
-        if ts.date() == session_date and in_window(ts, window):
+        if not (isfinite(high) and isfinite(low)):
+            raise ValueError("session high/low must be finite")
+        if high < low:
+            raise ValueError("session high cannot be below low")
+        if _belongs_to_session_date(ts, window, session_date):
             selected.append((ts, high, low))
     if not selected:
         return None
