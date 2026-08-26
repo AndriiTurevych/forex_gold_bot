@@ -60,6 +60,70 @@ def _exit_index_short(
     return "NONE", None
 
 
+def _long_excursions(
+    entry: float,
+    stop: float,
+    target: float,
+    bars: list[tuple[float, float, float]],
+    first_touch: str,
+    touch_bar: int | None,
+) -> tuple[float, float]:
+    """Return point-in-time MFE/MAE without using unknowable post-exit extremes.
+
+    With OHLC bars, the ordering of the non-triggering extreme inside the exit bar is
+    unknown. Counting the full exit bar can therefore create favorable excursion after
+    the trade had already exited. For deterministic TARGET/STOP exits, use completed
+    pre-exit bars plus the known exit level only. Ambiguous bars remain fully observed
+    but have NaN realized R and must be excluded from deterministic outcome scoring.
+    """
+    risk = entry - stop
+    if touch_bar is None:
+        observed = bars
+        max_high = max([entry] + [b[0] for b in observed])
+        min_low = min([entry] + [b[1] for b in observed])
+    elif first_touch == "AMBIGUOUS":
+        observed = bars[:touch_bar]
+        max_high = max([entry] + [b[0] for b in observed])
+        min_low = min([entry] + [b[1] for b in observed])
+    else:
+        completed = bars[: touch_bar - 1]
+        max_high = max([entry] + [b[0] for b in completed])
+        min_low = min([entry] + [b[1] for b in completed])
+        if first_touch == "TARGET":
+            max_high = max(max_high, target)
+        elif first_touch == "STOP":
+            min_low = min(min_low, stop)
+    return (max_high - entry) / risk, (entry - min_low) / risk
+
+
+def _short_excursions(
+    entry: float,
+    stop: float,
+    target: float,
+    bars: list[tuple[float, float, float]],
+    first_touch: str,
+    touch_bar: int | None,
+) -> tuple[float, float]:
+    risk = stop - entry
+    if touch_bar is None:
+        observed = bars
+        max_high = max([entry] + [b[0] for b in observed])
+        min_low = min([entry] + [b[1] for b in observed])
+    elif first_touch == "AMBIGUOUS":
+        observed = bars[:touch_bar]
+        max_high = max([entry] + [b[0] for b in observed])
+        min_low = min([entry] + [b[1] for b in observed])
+    else:
+        completed = bars[: touch_bar - 1]
+        max_high = max([entry] + [b[0] for b in completed])
+        min_low = min([entry] + [b[1] for b in completed])
+        if first_touch == "TARGET":
+            min_low = min(min_low, target)
+        elif first_touch == "STOP":
+            max_high = max(max_high, stop)
+    return (entry - min_low) / risk, (max_high - entry) / risk
+
+
 def label_long(entry: float, stop: float, target: float, future_bars: Iterable[tuple[float, float, float]]) -> OutcomeLabel:
     _validate_geometry(entry, stop, target)
     risk = entry - stop
@@ -67,17 +131,9 @@ def label_long(entry: float, stop: float, target: float, future_bars: Iterable[t
         raise ValueError("invalid long geometry")
     bars = _materialize_bars(future_bars)
     first_touch, touch_bar = _exit_index_long(bars, stop, target)
-
-    # MFE/MAE are trade-path excursions, so observations after a deterministic
-    # target/stop exit must not influence the label. For an ambiguous OHLC bar,
-    # include that bar but never use subsequent bars.
-    observed = bars[:touch_bar] if touch_bar is not None else bars
-    max_high = max([entry] + [b[0] for b in observed])
-    min_low = min([entry] + [b[1] for b in observed])
+    mfe, mae = _long_excursions(entry, stop, target, bars, first_touch, touch_bar)
     last_close = bars[-1][2] if bars else entry
 
-    mfe = (max_high - entry) / risk
-    mae = (entry - min_low) / risk
     if first_touch == "TARGET":
         realized = (target - entry) / risk
     elif first_touch == "STOP":
@@ -96,14 +152,9 @@ def label_short(entry: float, stop: float, target: float, future_bars: Iterable[
         raise ValueError("invalid short geometry")
     bars = _materialize_bars(future_bars)
     first_touch, touch_bar = _exit_index_short(bars, stop, target)
-
-    observed = bars[:touch_bar] if touch_bar is not None else bars
-    max_high = max([entry] + [b[0] for b in observed])
-    min_low = min([entry] + [b[1] for b in observed])
+    mfe, mae = _short_excursions(entry, stop, target, bars, first_touch, touch_bar)
     last_close = bars[-1][2] if bars else entry
 
-    mfe = (entry - min_low) / risk
-    mae = (max_high - entry) / risk
     if first_touch == "TARGET":
         realized = (entry - target) / risk
     elif first_touch == "STOP":
