@@ -1,0 +1,49 @@
+id: EXP-0001
+name: liquidity_sweep_reversal_v1
+status: preregistered
+instrument_primary: GC
+instrument_secondary: XAUUSD
+frequency: 1m
+hypothesis: >
+  HTF location plus an external/session liquidity sweep followed by displacement,
+  market-structure shift and FVG/IFVG retest has positive net expectancy toward
+  opposing liquidity after realistic costs.
+features:
+  - htf_location
+  - pdh_pdl_distance_atr
+  - pwh_pwl_distance_atr
+  - session_high_low_distance_atr
+  - liquidity_side_swept
+  - sweep_depth_atr
+  - displacement_atr
+  - mss_direction
+  - fvg_size_atr
+  - ifvg_state
+  - retracement_pct
+  - smt_state
+  - dxy_confirmation
+  - macro_event_distance_minutes
+segments:
+  - london
+  - ny_am
+  - macro_window
+  - volatility_regime
+labels:
+  horizons_minutes: [5, 15, 30, 60]
+  metrics: [mfe, mae, realized_r, time_to_target, time_to_stop, first_touch]
+validation:
+  purged_cv: true
+  embargo: true
+  walk_forward: true
+  regime_holdout: true
+  deflated_sharpe: true
+  pbo: true
+  untouched_final_holdout: true
+cost_stress: [1.0, 1.5, 2.0]
+promotion_gate:
+  net_expectancy_positive: true
+  min_oos_profit_factor: 1.30
+  min_oos_occurrences: 200
+  max_single_period_pnl_share: 0.30
+  must_survive_cost_multiple: 1.5
+notes: No hypothesis/threshold edits after results are observed; changes require a new experiment ID.
