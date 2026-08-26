@@ -2,10 +2,11 @@ from datetime import date, datetime, time, timedelta, timezone
 
 import pytest
 
-from gold_cio_v9.backtest.costs import CostAssumptions, net_pnl, round_trip_cost
+from gold_cio_v9.backtest.costs import CostAssumptions, net_pnl_price, round_trip_cost_price
 from gold_cio_v9.features.store import FeatureRow, PointInTimeFeatureStore
 from gold_cio_v9.ict_engine.features import Bar, detect_liquidity_sweep
 from gold_cio_v9.ict_engine.sessions import SessionWindow, session_liquidity
+from gold_cio_v9.labels.outcomes import label_long
 from gold_cio_v9.risk.gate import RiskState, evaluate
 
 
@@ -36,17 +37,17 @@ def test_risk_gate_rejects_negative_loss_fraction():
     assert decision.reason == "INVALID_DAILY_LOSS"
 
 
-def test_cost_stress_is_applied():
+def test_cost_stress_is_applied_in_price_units():
     assumptions = CostAssumptions(0.2, 0.1, 0.05, 1.5)
-    assert round_trip_cost(assumptions) == pytest.approx(0.6)
-    assert net_pnl(2.0, assumptions) == pytest.approx(1.4)
+    assert round_trip_cost_price(assumptions) == pytest.approx(0.6)
+    assert net_pnl_price(2.0, assumptions) == pytest.approx(1.4)
 
 
 def test_cost_model_rejects_non_finite_input():
     with pytest.raises(ValueError):
         CostAssumptions(float("nan"), 0.1, 0.05)
     with pytest.raises(ValueError):
-        net_pnl(float("inf"), CostAssumptions(0.2, 0.1, 0.05))
+        net_pnl_price(float("inf"), CostAssumptions(0.2, 0.1, 0.05))
 
 
 def test_point_in_time_store_blocks_future_availability():
@@ -76,3 +77,14 @@ def test_overnight_session_uses_start_date_anchor_without_cross_session_leakage(
     assert result is not None
     assert result.high == 103.0
     assert result.low == 98.0
+
+
+def test_label_marks_same_bar_target_and_stop_as_ambiguous():
+    label = label_long(100.0, 99.0, 102.0, [(102.5, 98.5, 100.5)])
+    assert label.first_touch == "AMBIGUOUS"
+    assert label.realized_r != label.realized_r  # NaN by design: ordering is unknowable from OHLC
+
+
+def test_label_rejects_malformed_future_bar():
+    with pytest.raises(ValueError):
+        label_long(100.0, 99.0, 102.0, [(99.0, 101.0, 100.0)])
