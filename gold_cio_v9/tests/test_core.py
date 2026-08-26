@@ -91,6 +91,25 @@ def test_point_in_time_store_rejects_naive_timestamps():
         FeatureRow(naive, naive, {"x": 1})
 
 
+def test_feature_row_copies_values_to_prevent_retroactive_mutation():
+    t0 = datetime(2026, 8, 26, 10, 0, tzinfo=timezone.utc)
+    raw = {"x": 1}
+    row = FeatureRow(t0, t0, raw)
+    raw["x"] = 999
+    assert row.values["x"] == 1
+    with pytest.raises(TypeError):
+        row.values["x"] = 2
+
+
+def test_latest_prefers_newest_available_revision_for_same_event():
+    t0 = datetime(2026, 8, 26, 10, 0, tzinfo=timezone.utc)
+    store = PointInTimeFeatureStore()
+    store.append(FeatureRow(t0, t0, {"revision": 1}))
+    store.append(FeatureRow(t0, t0 + timedelta(minutes=5), {"revision": 2}))
+    assert store.latest(t0 + timedelta(minutes=4)).values["revision"] == 1
+    assert store.latest(t0 + timedelta(minutes=5)).values["revision"] == 2
+
+
 def test_overnight_session_uses_start_date_anchor_without_cross_session_leakage():
     window = SessionWindow("OVERNIGHT", time(22, 0), time(2, 0))
     rows = [
