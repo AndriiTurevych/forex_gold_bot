@@ -152,36 +152,50 @@ def test_label_rejects_malformed_future_bar():
         label_long(100.0, 99.0, 102.0, [(99.0, 101.0, 100.0)])
 
 
-def test_long_excursions_stop_at_trade_exit():
+def test_long_excursions_do_not_use_unknown_post_stop_extreme():
     label = label_long(
         100.0,
         99.0,
         102.0,
         [
-            (100.4, 98.8, 99.2),  # stop exits here
+            (100.4, 98.8, 99.2),  # stop exits in this bar; high ordering is unknowable
             (110.0, 100.0, 109.0),  # must not inflate MFE after exit
         ],
     )
     assert label.first_touch == "STOP"
     assert label.bars_to_first_touch == 1
-    assert label.mfe_r == pytest.approx(0.4)
-    assert label.mae_r == pytest.approx(1.2)
+    assert label.mfe_r == pytest.approx(0.0)
+    assert label.mae_r == pytest.approx(1.0)
 
 
-def test_short_excursions_stop_at_trade_exit():
+def test_short_excursions_do_not_use_unknown_post_stop_extreme():
     label = label_short(
         100.0,
         101.0,
         98.0,
         [
-            (101.2, 99.6, 100.8),  # stop exits here
+            (101.2, 99.6, 100.8),  # stop exits in this bar; low ordering is unknowable
             (100.0, 90.0, 91.0),  # must not inflate MFE after exit
         ],
     )
     assert label.first_touch == "STOP"
     assert label.bars_to_first_touch == 1
-    assert label.mfe_r == pytest.approx(0.4)
-    assert label.mae_r == pytest.approx(1.2)
+    assert label.mfe_r == pytest.approx(0.0)
+    assert label.mae_r == pytest.approx(1.0)
+
+
+def test_long_target_bar_does_not_inflate_mae_with_unknown_late_low():
+    label = label_long(100.0, 99.0, 102.0, [(102.2, 99.2, 101.8)])
+    assert label.first_touch == "TARGET"
+    assert label.mfe_r == pytest.approx(2.0)
+    assert label.mae_r == pytest.approx(0.0)
+
+
+def test_short_target_bar_does_not_inflate_mae_with_unknown_late_high():
+    label = label_short(100.0, 101.0, 98.0, [(100.8, 97.8, 98.2)])
+    assert label.first_touch == "TARGET"
+    assert label.mfe_r == pytest.approx(2.0)
+    assert label.mae_r == pytest.approx(0.0)
 
 
 def test_structure_engine_fails_closed_on_nan_and_bad_geometry():
