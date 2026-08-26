@@ -6,6 +6,7 @@ on:
       - 'gold_cio_v9/__init__.py'
       - 'gold_cio_v9/validation/**'
       - 'gold_cio_v9/backtest/**'
+      - 'gold_cio_v9/data/**'
       - 'gold_cio_v9/features/**'
       - 'gold_cio_v9/ict_engine/**'
       - 'gold_cio_v9/labels/**'
@@ -20,6 +21,7 @@ on:
       - 'gold_cio_v9/__init__.py'
       - 'gold_cio_v9/validation/**'
       - 'gold_cio_v9/backtest/**'
+      - 'gold_cio_v9/data/**'
       - 'gold_cio_v9/features/**'
       - 'gold_cio_v9/ict_engine/**'
       - 'gold_cio_v9/labels/**'
@@ -70,6 +72,9 @@ jobs:
 
       - name: Test 6 - Preregistration immutability and instrument scope
         run: python -m pytest -q gold_cio_v9/tests/trust/test_preregistration_immutability.py
+
+      - name: Test 7 - Historical GC data governance
+        run: python -m pytest -q gold_cio_v9/tests/test_data_governance.py
 
       - name: Trust gate summary
         if: success()
