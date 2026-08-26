@@ -1,5 +1,6 @@
 """Independent deterministic risk gate. AI/ML cannot override these controls."""
 from dataclasses import dataclass
+from math import isfinite
 
 
 @dataclass(frozen=True)
@@ -19,7 +20,25 @@ class RiskDecision:
     reason: str
 
 
+def _valid_fraction(value: float) -> bool:
+    return isfinite(value) and value >= 0.0
+
+
 def evaluate(state: RiskState) -> RiskDecision:
+    """Fail closed on malformed state before evaluating trading limits."""
+    if not _valid_fraction(state.risk_fraction):
+        return RiskDecision(False, "INVALID_RISK_FRACTION")
+    if not _valid_fraction(state.daily_loss_fraction):
+        return RiskDecision(False, "INVALID_DAILY_LOSS")
+    if not _valid_fraction(state.weekly_drawdown_fraction):
+        return RiskDecision(False, "INVALID_WEEKLY_DRAWDOWN")
+    if not all(isinstance(v, bool) for v in (
+        state.spread_ok,
+        state.data_fresh,
+        state.feed_agreement,
+        state.high_impact_event_lock,
+    )):
+        return RiskDecision(False, "INVALID_BOOLEAN_STATE")
     if state.risk_fraction > 0.0025:
         return RiskDecision(False, "RISK_PER_TRADE_LIMIT")
     if state.daily_loss_fraction >= 0.01:
