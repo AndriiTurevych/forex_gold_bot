@@ -1,0 +1,26 @@
+name: Gold CIO v9 CI
+
+on:
+  push:
+    branches: [gold-cio-v9]
+    paths:
+      - 'gold_cio_v9/**'
+      - '.github/workflows/gold-cio-v9-ci.yml'
+  pull_request:
+    paths:
+      - 'gold_cio_v9/**'
+      - '.github/workflows/gold-cio-v9-ci.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install test dependency
+        run: python -m pip install --upgrade pytest
+      - name: Run Gold CIO v9 tests
+        run: python -m pytest -q gold_cio_v9/tests
