@@ -4,6 +4,7 @@ The labeler measures what happened after an independently generated candidate.
 It does not create the candidate and therefore remains separate from alpha logic.
 """
 from dataclasses import dataclass
+from math import isfinite
 from typing import Iterable
 
 
@@ -16,11 +17,29 @@ class OutcomeLabel:
     bars_to_first_touch: int | None
 
 
+def _validate_geometry(*values: float) -> None:
+    if not all(isfinite(v) for v in values):
+        raise ValueError("entry/stop/target must be finite")
+
+
+def _materialize_bars(future_bars: Iterable[tuple[float, float, float]]) -> list[tuple[float, float, float]]:
+    bars = list(future_bars)
+    for high, low, close in bars:
+        if not all(isfinite(v) for v in (high, low, close)):
+            raise ValueError("future bars must contain finite values")
+        if high < low:
+            raise ValueError("future bar high cannot be below low")
+        if not low <= close <= high:
+            raise ValueError("future bar close must lie within [low, high]")
+    return bars
+
+
 def label_long(entry: float, stop: float, target: float, future_bars: Iterable[tuple[float, float, float]]) -> OutcomeLabel:
+    _validate_geometry(entry, stop, target)
     risk = entry - stop
     if risk <= 0 or target <= entry:
         raise ValueError("invalid long geometry")
-    bars = list(future_bars)
+    bars = _materialize_bars(future_bars)
     max_high = max([entry] + [b[0] for b in bars])
     min_low = min([entry] + [b[1] for b in bars])
     first_touch = "NONE"
@@ -52,10 +71,11 @@ def label_long(entry: float, stop: float, target: float, future_bars: Iterable[t
 
 
 def label_short(entry: float, stop: float, target: float, future_bars: Iterable[tuple[float, float, float]]) -> OutcomeLabel:
+    _validate_geometry(entry, stop, target)
     risk = stop - entry
     if risk <= 0 or target >= entry:
         raise ValueError("invalid short geometry")
-    bars = list(future_bars)
+    bars = _materialize_bars(future_bars)
     max_high = max([entry] + [b[0] for b in bars])
     min_low = min([entry] + [b[1] for b in bars])
     first_touch = "NONE"
