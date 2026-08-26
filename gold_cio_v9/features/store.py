@@ -6,6 +6,11 @@ from datetime import datetime
 from typing import Any
 
 
+def _require_aware(ts: datetime, name: str) -> None:
+    if ts.tzinfo is None or ts.utcoffset() is None:
+        raise ValueError(f"{name} must be timezone-aware")
+
+
 @dataclass
 class FeatureRow:
     event_time: datetime
@@ -13,6 +18,8 @@ class FeatureRow:
     values: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
+        _require_aware(self.event_time, "event_time")
+        _require_aware(self.available_time, "available_time")
         if self.available_time < self.event_time:
             raise ValueError("available_time cannot precede event_time")
 
@@ -26,6 +33,7 @@ class PointInTimeFeatureStore:
 
     def snapshot(self, decision_time: datetime) -> list[FeatureRow]:
         """Return only observations that were actually available by decision_time."""
+        _require_aware(decision_time, "decision_time")
         return [r for r in self._rows if r.available_time <= decision_time]
 
     def latest(self, decision_time: datetime) -> FeatureRow | None:
