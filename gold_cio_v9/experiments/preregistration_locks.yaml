@@ -1,0 +1,17 @@
+version: 1
+program: gold-cio-v9
+policy: >
+  A preregistered experiment is immutable. Any change to hypothesis, instrument,
+  features, thresholds, segmentation, labels, or validation protocol requires a
+  new EXP-XXXX identifier and a new preregistration.
+experiments:
+  EXP-0001:
+    path: gold_cio_v9/experiments/EXP-0001.yaml
+    registered_blob_sha: c1d126b2383702865baa068ce0f1d9796ebf1b30
+    status: LOCKED
+    primary_instrument: GC
+    secondary_instrument: XAUUSD
+    secondary_scope: CROSS_CHECK_ONLY
+    verdict_transfer_allowed: false
+    post_accept_modification_allowed: false
+    post_reject_modification_allowed: false
