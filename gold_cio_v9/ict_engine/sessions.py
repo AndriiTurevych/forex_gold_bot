@@ -94,12 +94,12 @@ def session_liquidity(
     return SessionLiquidity(window.name, session_date, high_row[1], low_row[2], high_row[0], low_row[0])
 
 
-# Research defaults remain expressed in the timezone of incoming data because the
-# exact session convention is experiment-specific. Production/research adapters
-# should set timezone_name explicitly on configured windows (e.g. America/New_York)
-# whenever wall-clock session semantics are required.
+# Deterministic research defaults. Their wall-clock convention is explicitly UTC
+# so identical source observations produce identical session membership regardless
+# of the timezone used by an upstream data feed. Experiments may override these
+# with named local-market timezones (e.g. America/New_York) when required.
 DEFAULT_WINDOWS = {
-    "ASIA": SessionWindow("ASIA", time(0, 0), time(6, 0)),
-    "LONDON": SessionWindow("LONDON", time(7, 0), time(10, 0)),
-    "NY_AM": SessionWindow("NY_AM", time(13, 30), time(16, 0)),
+    "ASIA": SessionWindow("ASIA", time(0, 0), time(6, 0), "UTC"),
+    "LONDON": SessionWindow("LONDON", time(7, 0), time(10, 0), "UTC"),
+    "NY_AM": SessionWindow("NY_AM", time(13, 30), time(16, 0), "UTC"),
 }
