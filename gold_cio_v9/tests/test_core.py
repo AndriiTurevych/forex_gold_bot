@@ -4,8 +4,13 @@ import pytest
 
 from gold_cio_v9.backtest.costs import CostAssumptions, net_pnl_price, round_trip_cost_price
 from gold_cio_v9.features.store import FeatureRow, PointInTimeFeatureStore
-from gold_cio_v9.ict_engine.features import Bar, detect_liquidity_sweep
-from gold_cio_v9.ict_engine.sessions import SessionWindow, session_liquidity
+from gold_cio_v9.ict_engine.features import (
+    Bar,
+    dealing_range_position,
+    detect_liquidity_sweep,
+    displacement_atr,
+)
+from gold_cio_v9.ict_engine.sessions import SessionWindow, in_window, session_liquidity
 from gold_cio_v9.ict_engine.structure import detect_structure_break
 from gold_cio_v9.labels.outcomes import label_long, label_short
 from gold_cio_v9.risk.gate import RiskState, evaluate
@@ -15,6 +20,25 @@ def test_bsl_sweep_requires_close_back_below_level():
     bar = Bar("t", 100.0, 102.0, 99.5, 100.5)
     sweep = detect_liquidity_sweep(bar, reference_high=101.0, reference_low=98.0)
     assert sweep is not None and sweep.side == "BSL"
+
+
+def test_ict_features_fail_closed_on_nan_and_bad_ohlc():
+    with pytest.raises(ValueError):
+        detect_liquidity_sweep(
+            Bar("t", 100.0, float("nan"), 99.0, 100.0),
+            reference_high=101.0,
+            reference_low=98.0,
+        )
+    with pytest.raises(ValueError):
+        displacement_atr(Bar("t", 100.0, 99.0, 101.0, 100.0), 1.0)
+    with pytest.raises(ValueError):
+        dealing_range_position(float("nan"), 99.0, 101.0)
+    with pytest.raises(ValueError):
+        detect_liquidity_sweep(
+            Bar("t", 100.0, 102.0, 99.0, 100.0),
+            reference_high=98.0,
+            reference_low=101.0,
+        )
 
 
 def test_risk_gate_vetoes_stale_data():
@@ -78,6 +102,16 @@ def test_overnight_session_uses_start_date_anchor_without_cross_session_leakage(
     assert result is not None
     assert result.high == 103.0
     assert result.low == 98.0
+
+
+def test_session_timezone_handles_new_york_dst_without_fixed_utc_offset():
+    window = SessionWindow("NY_AM", time(8, 30), time(11, 0), "America/New_York")
+    # 09:00 New York is 13:00 UTC in July (EDT) and 14:00 UTC in January (EST).
+    summer = datetime(2026, 7, 15, 13, 0, tzinfo=timezone.utc)
+    winter = datetime(2026, 1, 15, 14, 0, tzinfo=timezone.utc)
+    assert in_window(summer, window)
+    assert in_window(winter, window)
+    assert not in_window(datetime(2026, 7, 15, 12, 0, tzinfo=timezone.utc), window)
 
 
 def test_label_marks_same_bar_target_and_stop_as_ambiguous():
