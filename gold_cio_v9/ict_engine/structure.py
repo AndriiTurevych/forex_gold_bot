@@ -4,6 +4,7 @@ V1 deliberately uses explicit swing references supplied by the upstream swing de
 No hindsight relabeling is allowed after the fact.
 """
 from dataclasses import dataclass
+from math import isfinite
 from typing import Optional
 
 
@@ -31,6 +32,22 @@ def detect_structure_break(
     - opposing break without sufficient displacement => CHOCH
     - opposing break with displacement >= threshold => MSS
     """
+    numeric = (
+        close_price,
+        prior_swing_high,
+        prior_swing_low,
+        displacement_atr,
+        min_displacement_atr,
+    )
+    if not all(isfinite(v) for v in numeric):
+        raise ValueError("structure inputs must be finite")
+    if prior_swing_high <= prior_swing_low:
+        raise ValueError("prior_swing_high must exceed prior_swing_low")
+    if displacement_atr < 0:
+        raise ValueError("displacement_atr cannot be negative")
+    if min_displacement_atr <= 0:
+        raise ValueError("min_displacement_atr must be positive")
+
     trend = prior_trend.upper()
     if trend not in {"BULLISH", "BEARISH"}:
         raise ValueError("prior_trend must be BULLISH or BEARISH")
