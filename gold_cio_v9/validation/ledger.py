@@ -9,6 +9,9 @@ from pathlib import Path
 from typing import Any
 
 
+VALID_VERDICTS = {"ACCEPT", "REJECT", "INSUFFICIENT_DATA"}
+
+
 @dataclass(frozen=True)
 class EvidenceRecord:
     recorded_at: str
@@ -45,8 +48,9 @@ class EvidenceLedger:
         metrics: dict[str, Any],
         failed_gates: tuple[str, ...],
     ) -> EvidenceRecord:
-        if verdict not in {"ACCEPT", "REJECT"}:
-            raise ValueError("verdict must be ACCEPT or REJECT")
+        if verdict not in VALID_VERDICTS:
+            allowed = ", ".join(sorted(VALID_VERDICTS))
+            raise ValueError(f"verdict must be one of: {allowed}")
         record = EvidenceRecord(
             recorded_at=datetime.now(timezone.utc).isoformat(),
             experiment_id=experiment_id,
