@@ -41,3 +41,18 @@ def test_regime_fragile_edge_is_rejected():
     d = evaluate_exp0001(m)
     assert not d.accepted
     assert "CATASTROPHIC_REGIME" in d.failed_gates
+
+
+def test_ambiguous_trades_do_not_rescue_sample_size():
+    # 199 resolved + any number ambiguous is still below the >=200 resolved threshold.
+    m = replace(good_metrics(), raw_oos_setups=199, ambiguous_oos_setups=20, ambiguity_rate=20 / 219)
+    d = evaluate_exp0001(m)
+    assert not d.accepted
+    assert "RAW_OOS_SAMPLE" in d.failed_gates
+
+
+def test_excessive_ambiguity_is_data_resolution_risk():
+    m = replace(good_metrics(), ambiguous_oos_setups=20, ambiguity_rate=20 / 260)
+    d = evaluate_exp0001(m)
+    assert not d.accepted
+    assert "DATA_RESOLUTION_RISK" in d.failed_gates
