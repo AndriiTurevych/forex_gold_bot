@@ -66,3 +66,40 @@ def test_failed_gate_is_persisted(tmp_path: Path):
     assert outcome.verdict == "REJECT"
     assert "OOS_PROFIT_FACTOR" in outcome.failed_gates
     assert "OOS_PROFIT_FACTOR" in ledger.read_all()[0]["failed_gates"]
+
+
+def test_underpowered_sample_is_insufficient_data(tmp_path: Path):
+    ledger = EvidenceLedger(tmp_path / "ledger.jsonl")
+    metrics = replace(_passing_metrics(), raw_oos_setups=199)
+    outcome = publish_exp0001_verdict(
+        result=_result(),
+        validation=metrics,
+        ledger=ledger,
+        trial_id="trial-3",
+        git_commit="abc123",
+        config_hash="cfg",
+    )
+    assert outcome.verdict == "INSUFFICIENT_DATA"
+    assert "RAW_OOS_SAMPLE" in outcome.failed_gates
+    assert ledger.read_all()[0]["verdict"] == "INSUFFICIENT_DATA"
+
+
+def test_material_ambiguity_is_insufficient_data_even_with_other_failures(tmp_path: Path):
+    ledger = EvidenceLedger(tmp_path / "ledger.jsonl")
+    metrics = replace(
+        _passing_metrics(),
+        oos_expectancy=-0.1,
+        ambiguous_oos_setups=20,
+        ambiguity_rate=0.08,
+    )
+    outcome = publish_exp0001_verdict(
+        result=_result(),
+        validation=metrics,
+        ledger=ledger,
+        trial_id="trial-4",
+        git_commit="abc123",
+        config_hash="cfg",
+    )
+    assert outcome.verdict == "INSUFFICIENT_DATA"
+    assert "DATA_RESOLUTION_RISK" in outcome.failed_gates
+    assert "OOS_EXPECTANCY" in outcome.failed_gates
