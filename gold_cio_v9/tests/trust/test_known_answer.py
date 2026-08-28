@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 from gold_cio_v9.validation.acceptance import ValidationMetrics, evaluate_exp0001
 
 
@@ -17,3 +19,25 @@ def test_noise_is_rejected():
     assert not d.accepted
     assert "OOS_EXPECTANCY" in d.failed_gates
     assert "DEFLATED_SHARPE" in d.failed_gates
+
+
+def test_outlier_concentrated_edge_is_rejected():
+    m = replace(good_metrics(), top_trade_removal_ok=False, concentration_ok=False)
+    d = evaluate_exp0001(m)
+    assert not d.accepted
+    assert "TOP_TRADE_DEPENDENCE" in d.failed_gates
+    assert "PNL_CONCENTRATION" in d.failed_gates
+
+
+def test_edge_that_dies_under_cost_stress_is_rejected():
+    m = replace(good_metrics(), expectancy_cost_1_5x=0.0)
+    d = evaluate_exp0001(m)
+    assert not d.accepted
+    assert "COST_STRESS_1_5X" in d.failed_gates
+
+
+def test_regime_fragile_edge_is_rejected():
+    m = replace(good_metrics(), catastrophic_regime=True)
+    d = evaluate_exp0001(m)
+    assert not d.accepted
+    assert "CATASTROPHIC_REGIME" in d.failed_gates
