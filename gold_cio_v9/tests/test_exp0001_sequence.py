@@ -49,7 +49,7 @@ def test_full_sequence_emits_replay_setup_on_first_later_retest():
 
 
 def test_fvg_same_bar_is_not_treated_as_retest():
-    bars = [_bar(0), _bar(1, low=89.0), _bar(2), _bar(3, low=100.5, high=102.0)]
+    bars = [_bar(0), _bar(1, low=89.0), _bar(2), _bar(3, close=101.0, low=100.5, high=102.0)]
     setups = assemble_replay_setups(
         bars=bars, events=_long_events(bars)[:3], context=[_ctx(i) for i in range(4)],
         htf_permission={3: True}, horizon_bars=60,
@@ -58,7 +58,7 @@ def test_fvg_same_bar_is_not_treated_as_retest():
 
 
 def test_roll_window_clears_pending_sequence():
-    bars = [_bar(0), _bar(1, low=89.0), _bar(2), _bar(3, roll=True), _bar(4, low=100.5, high=102.0)]
+    bars = [_bar(0), _bar(1, low=89.0), _bar(2), _bar(3, roll=True), _bar(4, close=101.0, low=100.5, high=102.0)]
     events = _long_events(bars)
     setups = assemble_replay_setups(
         bars=bars, events=events, context=[_ctx(i) for i in range(5)],
