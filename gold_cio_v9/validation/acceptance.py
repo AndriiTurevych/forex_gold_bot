@@ -2,6 +2,9 @@
 from dataclasses import dataclass
 
 
+MAX_AMBIGUITY_RATE = 0.05
+
+
 @dataclass(frozen=True)
 class ValidationMetrics:
     oos_expectancy: float
@@ -18,6 +21,8 @@ class ValidationMetrics:
     catastrophic_regime: bool
     data_integrity_ok: bool
     post_result_parameter_edits: bool
+    ambiguous_oos_setups: int = 0
+    ambiguity_rate: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -32,8 +37,15 @@ def evaluate_exp0001(m: ValidationMetrics) -> AcceptanceDecision:
         failed.append("OOS_EXPECTANCY")
     if m.oos_profit_factor < 1.30:
         failed.append("OOS_PROFIT_FACTOR")
+    # raw_oos_setups is precommitted to mean RESOLVED OOS setups only.
+    # Same-bar ambiguous outcomes are excluded from realized-R metrics and do
+    # not count toward the >=200 sample requirement.
     if m.raw_oos_setups < 200:
         failed.append("RAW_OOS_SAMPLE")
+    if m.ambiguous_oos_setups < 0 or not 0.0 <= m.ambiguity_rate <= 1.0:
+        failed.append("DATA_RESOLUTION_RISK")
+    elif m.ambiguity_rate > MAX_AMBIGUITY_RATE:
+        failed.append("DATA_RESOLUTION_RISK")
     if not m.effective_sample_ok:
         failed.append("EFFECTIVE_INDEPENDENCE")
     if not m.walk_forward_stable:
