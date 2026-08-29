@@ -11,6 +11,13 @@ from gold_cio_v9.data.dataset_manifest import DatasetManifest, build_gc_dataset_
 from gold_cio_v9.data.evidence_lineage import AcquisitionLineageManifest
 from gold_cio_v9.data.governance import HistoricalBar
 from gold_cio_v9.experiments.exp0001_evidence_book import EvidenceBook, build_exp0001_evidence_book
+from gold_cio_v9.experiments.exp0001_locked import (
+    IMPLEMENTATION_POLICY_ID,
+    PRIMARY_HORIZON_MINUTES,
+    STRESS_MULTIPLE,
+    VALIDATION_POLICY_ID,
+    assert_locked_costs,
+)
 from gold_cio_v9.validation.acceptance import evaluate_exp0001
 from gold_cio_v9.validation.evidence_run import classify_verdict
 from gold_cio_v9.validation.exp0001_full_validation import FullValidationBuild, build_validation_metrics
@@ -19,9 +26,8 @@ from gold_cio_v9.validation.ledger import EvidenceLedger, EvidenceRecord
 from gold_cio_v9.validation.macro_calendar import MacroCalendarSnapshot, validate_macro_calendar_for_bars
 from gold_cio_v9.validation.trials import TrialRecord, TrialsRegistry
 
-IMPLEMENTATION_POLICY = "EXP-0001-BASELINE-POLICY-V4"
-VALIDATION_POLICY = "EXP-0001-VALIDATION-POLICY-V5"
-STRESS_MULTIPLE = 1.5
+IMPLEMENTATION_POLICY = IMPLEMENTATION_POLICY_ID
+VALIDATION_POLICY = VALIDATION_POLICY_ID
 
 
 @dataclass(frozen=True)
@@ -88,11 +94,10 @@ def run_formal_exp0001_test(
     evidence_ledger: EvidenceLedger,
     git_commit: str,
 ) -> FormalExpOutcome:
-    """Execute the locked binding test after all external evidence is hash-bound."""
+    """Execute the locked formal test after every external input is hash-bound."""
     if not git_commit.strip():
         raise ValueError("git_commit is required")
-    if base_costs.stress_multiple != 1.0:
-        raise ValueError("formal base costs must use stress_multiple=1.0")
+    assert_locked_costs(base_costs)
 
     materialized = tuple(bars)
     recomputed = build_gc_dataset_manifest(materialized)
@@ -122,6 +127,7 @@ def run_formal_exp0001_test(
         "max_settlement_days_forward": acquisition_lineage.max_settlement_days_forward,
         "base_costs": asdict(base_costs),
         "stress_multiple": STRESS_MULTIPLE,
+        "primary_horizon_minutes": PRIMARY_HORIZON_MINUTES,
     }
 
     trial = trial_registry.register(
@@ -136,7 +142,7 @@ def run_formal_exp0001_test(
     )
     regimes = build_regime_labels(
         bars=materialized, book=base_book,
-        macro_events=macro_calendar.events, horizon_minutes=60,
+        macro_events=macro_calendar.events, horizon_minutes=PRIMARY_HORIZON_MINUTES,
     )
     validation = build_validation_metrics(
         base_book=base_book, stress_1_5x_book=stress_book,
