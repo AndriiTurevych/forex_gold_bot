@@ -23,6 +23,10 @@ def _bars():
     ) for i in range(3))
 
 
+def _lineage(dataset_hash, *, master_hash="master-hash"):
+    return AcquisitionLineageManifest(5, 1, (), (), dataset_hash, "lineage", 365, master_hash)
+
+
 def _macro(start=date(2025, 1, 1), end=date(2025, 1, 2)):
     return build_macro_calendar_snapshot(coverage_start=start, coverage_end=end, source_id="calendar:test", events=())
 
@@ -48,7 +52,7 @@ def _validation():
 def test_formal_orchestrator_registers_before_results_and_ledgers_before_return(tmp_path, monkeypatch):
     bars = _bars()
     manifest = build_gc_dataset_manifest(bars)
-    lineage = AcquisitionLineageManifest(5, 1, (), (), manifest.dataset_hash, "lineage")
+    lineage = _lineage(manifest.dataset_hash)
     registry = TrialsRegistry(tmp_path / "trials.jsonl")
     ledger = EvidenceLedger(tmp_path / "ledger.jsonl")
     calls = []
@@ -71,6 +75,7 @@ def test_formal_orchestrator_registers_before_results_and_ledgers_before_return(
     )
     assert calls == [1.0, 1.5]
     assert out.verdict == "ACCEPT"
+    assert out.trial.config_hash
     rows = ledger.read_all()
     assert len(rows) == 1
     assert rows[0]["verdict"] == "ACCEPT"
@@ -81,11 +86,23 @@ def test_manifest_mismatch_fails_before_trial_registration(tmp_path):
     bars = _bars()
     manifest = build_gc_dataset_manifest(bars)
     bad = type(manifest)(manifest.instrument, manifest.rows, manifest.contracts, manifest.coverage, "bad")
-    lineage = AcquisitionLineageManifest(5, 1, (), (), "bad", "lineage")
     registry = TrialsRegistry(tmp_path / "trials.jsonl")
     with pytest.raises(ValueError, match="manifest does not match"):
         formal.run_formal_exp0001_test(
-            bars=bars, dataset_manifest=bad, acquisition_lineage=lineage,
+            bars=bars, dataset_manifest=bad, acquisition_lineage=_lineage("bad"),
+            macro_calendar=_macro(), base_costs=CostAssumptions(0.1, 0.1, 0.1),
+            trial_registry=registry, evidence_ledger=EvidenceLedger(tmp_path / "ledger.jsonl"), git_commit="abc",
+        )
+    assert registry.read_all() == []
+
+
+def test_missing_contract_master_fails_before_trial_registration(tmp_path):
+    bars = _bars()
+    manifest = build_gc_dataset_manifest(bars)
+    registry = TrialsRegistry(tmp_path / "trials.jsonl")
+    with pytest.raises(ValueError, match="immutable contract master"):
+        formal.run_formal_exp0001_test(
+            bars=bars, dataset_manifest=manifest, acquisition_lineage=_lineage(manifest.dataset_hash, master_hash=""),
             macro_calendar=_macro(), base_costs=CostAssumptions(0.1, 0.1, 0.1),
             trial_registry=registry, evidence_ledger=EvidenceLedger(tmp_path / "ledger.jsonl"), git_commit="abc",
         )
@@ -95,12 +112,11 @@ def test_manifest_mismatch_fails_before_trial_registration(tmp_path):
 def test_macro_coverage_mismatch_fails_before_trial_registration(tmp_path):
     bars = _bars()
     manifest = build_gc_dataset_manifest(bars)
-    lineage = AcquisitionLineageManifest(5, 1, (), (), manifest.dataset_hash, "lineage")
     registry = TrialsRegistry(tmp_path / "trials.jsonl")
     bad_macro = _macro(start=date(2024, 12, 1), end=date(2024, 12, 31))
     with pytest.raises(ValueError, match="does not cover"):
         formal.run_formal_exp0001_test(
-            bars=bars, dataset_manifest=manifest, acquisition_lineage=lineage,
+            bars=bars, dataset_manifest=manifest, acquisition_lineage=_lineage(manifest.dataset_hash),
             macro_calendar=bad_macro, base_costs=CostAssumptions(0.1, 0.1, 0.1),
             trial_registry=registry, evidence_ledger=EvidenceLedger(tmp_path / "ledger.jsonl"), git_commit="abc",
         )
@@ -110,10 +126,9 @@ def test_macro_coverage_mismatch_fails_before_trial_registration(tmp_path):
 def test_nonbase_cost_multiple_fails_closed(tmp_path):
     bars = _bars()
     manifest = build_gc_dataset_manifest(bars)
-    lineage = AcquisitionLineageManifest(5, 1, (), (), manifest.dataset_hash, "lineage")
     with pytest.raises(ValueError, match="stress_multiple=1.0"):
         formal.run_formal_exp0001_test(
-            bars=bars, dataset_manifest=manifest, acquisition_lineage=lineage,
+            bars=bars, dataset_manifest=manifest, acquisition_lineage=_lineage(manifest.dataset_hash),
             macro_calendar=_macro(), base_costs=CostAssumptions(0.1, 0.1, 0.1, 1.5),
             trial_registry=TrialsRegistry(tmp_path / "trials.jsonl"),
             evidence_ledger=EvidenceLedger(tmp_path / "ledger.jsonl"), git_commit="abc",
