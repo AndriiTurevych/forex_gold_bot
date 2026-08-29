@@ -15,7 +15,7 @@ def _bars():
     t0 = datetime(2025, 6, 2, 12, tzinfo=timezone.utc)
     return tuple(HistoricalBar(
         instrument="GC", contract="GCQ5", event_time=t0 + timedelta(minutes=i),
-        open=3300+i, high=3302+i, low=3299+i, close=3301+i, volume=10+i,
+        open=3300.0+i, high=3302.0+i, low=3299.0+i, close=3301.0+i, volume=10.0+i,
         quality_state=QualityState.VERIFIED, source_id="massive:test",
         roll_method=RollMethod.RAW_CONTRACT,
     ) for i in range(3))
