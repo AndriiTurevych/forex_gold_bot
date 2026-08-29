@@ -1,9 +1,9 @@
 """Outcome-independent statistical reducer for the locked EXP-0001 full test.
 
 Consumes trade-level evidence books produced under base and 1.5x stressed costs,
-then applies the pre-outcome V3 partition policy. No strategy thresholds or horizon
-selection are performed here; 60 minutes is the locked promotion horizon and the
-other horizons are used only for diagnostics/PBO.
+then applies the pre-outcome V4 validation policy. No strategy thresholds or
+horizon selection are performed here; 60 minutes is the locked promotion horizon
+and 5/15/30 are mandatory diagnostic/PBO horizons.
 """
 from __future__ import annotations
 
@@ -16,11 +16,7 @@ from typing import Mapping, Sequence
 from gold_cio_v9.backtest.splits import LabelInterval, purged_kfold
 from gold_cio_v9.experiments.exp0001_evidence_book import EvidenceBook, EvidenceTrade
 from gold_cio_v9.validation.acceptance import ValidationMetrics
-from gold_cio_v9.validation.metrics import (
-    removal_top_trades_expectancy,
-    top_fraction_pnl_share,
-    trade_metrics,
-)
+from gold_cio_v9.validation.metrics import removal_top_trades_expectancy, top_fraction_pnl_share, trade_metrics
 from gold_cio_v9.validation.statistics import deflated_sharpe_test, pbo_from_rank_paths
 
 PRIMARY_HORIZON = 60
@@ -68,7 +64,6 @@ def _primary(book: EvidenceBook) -> tuple[EvidenceTrade, ...]:
 
 
 def chronological_partition(book: EvidenceBook) -> ChronologicalPartition:
-    """Freeze 60/20/20 membership from candidate timestamps, not outcomes."""
     trades = _primary(book)
     if len(trades) < 5:
         raise ValueError("insufficient primary candidates for chronological partition")
@@ -93,6 +88,21 @@ def _map(book: EvidenceBook, horizon: int) -> dict[str, EvidenceTrade]:
     return out
 
 
+def _validate_base_stress_universes(base_book: EvidenceBook, stress_book: EvidenceBook) -> None:
+    if tuple(base_book.horizons_minutes) != HORIZONS or tuple(stress_book.horizons_minutes) != HORIZONS:
+        raise ValueError("evidence book horizons do not match locked EXP-0001 policy")
+    for horizon in HORIZONS:
+        base = _map(base_book, horizon)
+        stress = _map(stress_book, horizon)
+        if set(base) != set(stress):
+            raise ValueError(f"base/stress candidate universes differ at {horizon}m")
+        for cid in base:
+            if base[cid].signal_time != stress[cid].signal_time:
+                raise ValueError(f"base/stress candidate timestamps differ at {horizon}m")
+            if base[cid].contract != stress[cid].contract or base[cid].direction != stress[cid].direction:
+                raise ValueError(f"base/stress candidate identity differs at {horizon}m")
+
+
 def _finite_pnls(mapping: Mapping[str, EvidenceTrade], ids: Sequence[str]) -> list[float]:
     values: list[float] = []
     for cid in ids:
@@ -107,8 +117,7 @@ def _finite_pnls(mapping: Mapping[str, EvidenceTrade], ids: Sequence[str]) -> li
 
 
 def _timestamp_minute(t: EvidenceTrade) -> int:
-    dt = t.signal_time.astimezone(timezone.utc)
-    return int(dt.timestamp() // 60)
+    return int(t.signal_time.astimezone(timezone.utc).timestamp() // 60)
 
 
 def _purged_rank_paths(book: EvidenceBook, pre_holdout_ids: Sequence[str]) -> tuple[list[int], list[int], bool]:
@@ -124,7 +133,6 @@ def _purged_rank_paths(book: EvidenceBook, pre_holdout_ids: Sequence[str]) -> tu
     is_ranks: list[int] = []
     oos_ranks: list[int] = []
     effective_ok = True
-
     for split in splits:
         train_ids = [pre_holdout_ids[i] for i in split.train]
         test_ids = [pre_holdout_ids[i] for i in split.test]
@@ -154,25 +162,16 @@ def _walk_forward_expectancies(primary: Mapping[str, EvidenceTrade], pre_holdout
     n = len(pre_holdout_ids)
     min_train = max(1, floor(n * 0.50))
     test_size = max(1, floor(n * 0.10))
-    step = test_size
     values: list[float] = []
     test_start = min_train
     while test_start + test_size <= n:
-        ids = pre_holdout_ids[test_start : test_start + test_size]
-        pnl = _finite_pnls(primary, ids)
-        if not pnl:
-            values.append(float("-inf"))
-        else:
-            values.append(mean(pnl))
-        test_start += step
+        pnl = _finite_pnls(primary, pre_holdout_ids[test_start:test_start + test_size])
+        values.append(mean(pnl) if pnl else float("-inf"))
+        test_start += test_size
     return tuple(values)
 
 
-def _regime_checks(
-    primary: Mapping[str, EvidenceTrade],
-    oos_ids: Sequence[str],
-    regime_labels: Mapping[str, Sequence[str]],
-) -> tuple[tuple[str, ...], tuple[str, ...]]:
+def _regime_checks(primary: Mapping[str, EvidenceTrade], oos_ids: Sequence[str], regime_labels: Mapping[str, Sequence[str]]) -> tuple[tuple[str, ...], tuple[str, ...]]:
     by_regime: dict[str, list[float]] = {}
     for cid in oos_ids:
         trade = primary[cid]
@@ -185,7 +184,6 @@ def _regime_checks(
             continue
         for label in labels:
             by_regime.setdefault(str(label), []).append(float(trade.net_pnl_price))
-
     catastrophic: list[str] = []
     low_n_negative: list[str] = []
     for label, pnl in sorted(by_regime.items()):
@@ -197,26 +195,13 @@ def _regime_checks(
     return tuple(catastrophic), tuple(low_n_negative)
 
 
-def build_validation_metrics(
-    *,
-    base_book: EvidenceBook,
-    stress_1_5x_book: EvidenceBook,
-    trial_count: int,
-    regime_labels: Mapping[str, Sequence[str]],
-    data_integrity_ok: bool,
-    post_result_parameter_edits: bool = False,
-) -> FullValidationBuild:
-    """Build the exact ValidationMetrics consumed by the locked acceptance gate."""
+def build_validation_metrics(*, base_book: EvidenceBook, stress_1_5x_book: EvidenceBook, trial_count: int, regime_labels: Mapping[str, Sequence[str]], data_integrity_ok: bool, post_result_parameter_edits: bool = False) -> FullValidationBuild:
     if trial_count < 1:
         raise ValueError("trial_count must be >= 1")
+    _validate_base_stress_universes(base_book, stress_1_5x_book)
     partition = chronological_partition(base_book)
     primary = _map(base_book, PRIMARY_HORIZON)
     stress = _map(stress_1_5x_book, PRIMARY_HORIZON)
-    if set(primary) != set(stress):
-        raise ValueError("base/stress candidate universes differ")
-    for cid in primary:
-        if primary[cid].signal_time != stress[cid].signal_time:
-            raise ValueError("base/stress candidate timestamps differ")
 
     oos_all = [primary[cid] for cid in partition.oos_ids]
     oos = _finite_pnls(primary, partition.oos_ids)
@@ -234,10 +219,8 @@ def build_validation_metrics(
     pre_holdout = partition.development_ids + partition.oos_ids
     is_rank, oos_rank, effective_ok = _purged_rank_paths(base_book, pre_holdout)
     pbo = pbo_from_rank_paths(is_rank, oos_rank) if effective_ok and is_rank else 1.0
-
     wf = _walk_forward_expectancies(primary, pre_holdout)
     walk_forward_stable = bool(wf) and all(isfinite(x) and x > 0 for x in wf)
-
     dsr = deflated_sharpe_test(oos, trials=trial_count)
     top_share = top_fraction_pnl_share(oos, TOP_FRACTION)
     top_removed = removal_top_trades_expectancy(oos, TOP_FRACTION)
@@ -262,16 +245,10 @@ def build_validation_metrics(
         ambiguity_rate=ambiguity_rate,
     )
     diagnostics = FullValidationDiagnostics(
-        total_primary_candidates=len(primary),
-        resolved_oos=oos_metrics.count,
-        ambiguous_oos=ambiguous,
-        resolved_holdout=holdout_metrics.count,
-        walk_forward_test_expectancies=wf,
-        pbo=pbo,
-        dsr_p_value=dsr.p_value,
-        top_positive_pnl_share=top_share,
-        expectancy_after_top_removal=top_removed,
-        catastrophic_regimes=catastrophic,
-        low_n_negative_regimes=low_n_negative,
+        total_primary_candidates=len(primary), resolved_oos=oos_metrics.count,
+        ambiguous_oos=ambiguous, resolved_holdout=holdout_metrics.count,
+        walk_forward_test_expectancies=wf, pbo=pbo, dsr_p_value=dsr.p_value,
+        top_positive_pnl_share=top_share, expectancy_after_top_removal=top_removed,
+        catastrophic_regimes=catastrophic, low_n_negative_regimes=low_n_negative,
     )
     return FullValidationBuild(partition, metrics, diagnostics)
