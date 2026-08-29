@@ -28,7 +28,6 @@ def test_directional_permission_is_explicit():
 
 
 def test_prior_day_midpoint_permission_uses_completed_day_only():
-    # Two UTC days. Day 1 range midpoint is 100. Day 2 close 95 -> LONG only.
     values = []
     t0 = datetime(2026, 1, 5, 23, 55, tzinfo=timezone.utc)
     for i, c in enumerate([100, 110, 90, 100, 100, 95]):
@@ -76,5 +75,5 @@ def test_mixed_contract_fails_via_causal_context():
         open=101, high=102, low=100, close=101, volume=10,
         quality_state=QualityState.VERIFIED, source_id="TEST", roll_method=RollMethod.RAW_CONTRACT,
     )
-    with pytest.raises(ValueError, match="single contract"):
+    with pytest.raises(ValueError, match="one contract at a time"):
         build_exp0001_causal_inputs(bars, atr_period=1, swing_left_bars=1, swing_right_bars=1)
