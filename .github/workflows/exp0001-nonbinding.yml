@@ -1,0 +1,109 @@
+name: EXP-0001 Nonbinding Full Test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [gold-cio-v9]
+    paths:
+      - '.github/workflows/exp0001-nonbinding.yml'
+      - 'scripts/acquire_exp0001_massive.py'
+      - 'scripts/build_exp0001_bundle.py'
+      - 'scripts/preflight_exp0001.py'
+      - 'scripts/run_exp0001_formal.py'
+      - 'gold_cio_v9/experiments/EXP-0001-macro-calendar-official-v1.json'
+      - 'gold_cio_v9/data/**'
+      - 'gold_cio_v9/validation/**'
+      - 'gold_cio_v9/experiments/**'
+
+permissions:
+  contents: read
+
+env:
+  PYTHONUNBUFFERED: '1'
+
+jobs:
+  full-exp0001:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pyyaml numpy
+
+      - name: Verify Massive credential
+        env:
+          MASSIVE_API_KEY: ${{ secrets.MASSIVE_API_KEY }}
+        run: |
+          test -n "$MASSIVE_API_KEY" || { echo 'MASSIVE_API_KEY secret is required'; exit 3; }
+
+      - name: Run full unit and trust suites before evidence
+        run: |
+          python -m pytest -q gold_cio_v9/tests
+          python -m pytest -q gold_cio_v9/tester_trust
+
+      - name: Acquire authoritative GC evidence
+        env:
+          MASSIVE_API_KEY: ${{ secrets.MASSIVE_API_KEY }}
+        run: |
+          mkdir -p exp0001_artifacts
+          python scripts/acquire_exp0001_massive.py \
+            --start 2025-04-03 \
+            --end 2026-08-27 \
+            --output-dir exp0001_artifacts
+
+      - name: Build immutable evidence bundle
+        run: |
+          python scripts/build_exp0001_bundle.py \
+            --bars exp0001_artifacts/bars.jsonl \
+            --lineage exp0001_artifacts/lineage.json \
+            --contract-master exp0001_artifacts/contract_master.json \
+            --macro-calendar gold_cio_v9/experiments/EXP-0001-macro-calendar-official-v1.json \
+            --output exp0001_artifacts/evidence_bundle.json
+
+      - name: Zero-outcome readiness preflight
+        run: |
+          python scripts/preflight_exp0001.py \
+            --bundle exp0001_artifacts/evidence_bundle.json \
+            --output exp0001_artifacts/readiness.json
+
+      - name: Run EXP-0001 nonbinding formal test
+        run: |
+          python scripts/run_exp0001_formal.py \
+            --bundle exp0001_artifacts/evidence_bundle.json \
+            --git-commit "$GITHUB_SHA" \
+            --trials exp0001_artifacts/trials.jsonl \
+            --ledger exp0001_artifacts/evidence_ledger.jsonl \
+            --output exp0001_artifacts/exp0001_result.json \
+            --mode nonbinding
+
+      - name: Print machine verdict
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('exp0001_artifacts/exp0001_result.json').read_text())
+          print(json.dumps({
+              'verdict': r['verdict'],
+              'failed_gates': r['failed_gates'],
+              'trial_id': r['trial_id'],
+              'result_hash': r['result_hash'],
+              'dataset_hash': r['dataset_hash'],
+              'bundle_hash': r['bundle_hash'],
+          }, sort_keys=True, indent=2))
+          PY
+
+      - name: Upload evidence and result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: exp0001-nonbinding-${{ github.sha }}
+          path: exp0001_artifacts/
+          if-no-files-found: warn
+          retention-days: 30
