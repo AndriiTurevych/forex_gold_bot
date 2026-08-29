@@ -120,7 +120,21 @@ def _timestamp_minute(t: EvidenceTrade) -> int:
     return int(t.signal_time.astimezone(timezone.utc).timestamp() // 60)
 
 
-def _purged_rank_paths(book: EvidenceBook, pre_holdout_ids: Sequence[str]) -> tuple[list[int], list[int], bool]:
+def _fold_pbo(is_rank: Mapping[int, int], oos_rank: Mapping[int, int]) -> float:
+    """Return one fold's PBO indicator using the four locked horizon ranks.
+
+    pbo_from_rank_paths must be evaluated within a configuration family. Flattening
+    ranks from multiple folds would enlarge the bottom-half cutoff and can force PBO
+    to zero. This helper deliberately evaluates one 4-horizon family at a time.
+    """
+    if set(is_rank) != set(HORIZONS) or set(oos_rank) != set(HORIZONS):
+        raise ValueError("PBO fold ranks must cover all locked horizons")
+    is_vector = [is_rank[h] for h in HORIZONS]
+    oos_vector = [oos_rank[h] for h in HORIZONS]
+    return pbo_from_rank_paths(is_vector, oos_vector)
+
+
+def _purged_pbo(book: EvidenceBook, pre_holdout_ids: Sequence[str]) -> tuple[float, bool]:
     maps = {h: _map(book, h) for h in HORIZONS}
     primary_map = maps[PRIMARY_HORIZON]
     intervals = [
@@ -128,11 +142,9 @@ def _purged_rank_paths(book: EvidenceBook, pre_holdout_ids: Sequence[str]) -> tu
         for i, cid in enumerate(pre_holdout_ids)
     ]
     if len(intervals) < PURGED_FOLDS:
-        return [], [], False
+        return 1.0, False
     splits = purged_kfold(intervals, PURGED_FOLDS, embargo=EMBARGO_MINUTES)
-    is_ranks: list[int] = []
-    oos_ranks: list[int] = []
-    effective_ok = True
+    fold_pbo: list[float] = []
     for split in splits:
         train_ids = [pre_holdout_ids[i] for i in split.train]
         test_ids = [pre_holdout_ids[i] for i in split.test]
@@ -142,20 +154,15 @@ def _purged_rank_paths(book: EvidenceBook, pre_holdout_ids: Sequence[str]) -> tu
             train = _finite_pnls(maps[h], train_ids)
             test = _finite_pnls(maps[h], test_ids)
             if not train or not test:
-                effective_ok = False
-                break
+                return 1.0, False
             is_exp[h] = mean(train)
             oos_exp[h] = mean(test)
-        if not effective_ok:
-            break
         is_order = sorted(HORIZONS, key=lambda h: (-is_exp[h], h))
         oos_order = sorted(HORIZONS, key=lambda h: (-oos_exp[h], h))
         is_rank = {h: i + 1 for i, h in enumerate(is_order)}
         oos_rank = {h: i + 1 for i, h in enumerate(oos_order)}
-        for h in HORIZONS:
-            is_ranks.append(is_rank[h])
-            oos_ranks.append(oos_rank[h])
-    return is_ranks, oos_ranks, effective_ok
+        fold_pbo.append(_fold_pbo(is_rank, oos_rank))
+    return mean(fold_pbo), True
 
 
 def _walk_forward_expectancies(primary: Mapping[str, EvidenceTrade], pre_holdout_ids: Sequence[str]) -> tuple[float, ...]:
@@ -217,8 +224,7 @@ def build_validation_metrics(*, base_book: EvidenceBook, stress_1_5x_book: Evide
     ambiguity_rate = ambiguous / len(oos_all) if oos_all else 1.0
 
     pre_holdout = partition.development_ids + partition.oos_ids
-    is_rank, oos_rank, effective_ok = _purged_rank_paths(base_book, pre_holdout)
-    pbo = pbo_from_rank_paths(is_rank, oos_rank) if effective_ok and is_rank else 1.0
+    pbo, effective_ok = _purged_pbo(base_book, pre_holdout)
     wf = _walk_forward_expectancies(primary, pre_holdout)
     walk_forward_stable = bool(wf) and all(isfinite(x) and x > 0 for x in wf)
     dsr = deflated_sharpe_test(oos, trials=trial_count)
