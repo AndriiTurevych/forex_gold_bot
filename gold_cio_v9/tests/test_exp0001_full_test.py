@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
@@ -8,24 +8,23 @@ from gold_cio_v9.data.dataset_manifest import build_gc_dataset_manifest
 from gold_cio_v9.data.evidence_lineage import AcquisitionLineageManifest
 from gold_cio_v9.data.governance import HistoricalBar, QualityState, RollMethod
 from gold_cio_v9.validation.acceptance import ValidationMetrics
-from gold_cio_v9.validation.exp0001_full_validation import (
-    ChronologicalPartition, FullValidationBuild, FullValidationDiagnostics,
-)
+from gold_cio_v9.validation.exp0001_full_validation import ChronologicalPartition, FullValidationBuild, FullValidationDiagnostics
 from gold_cio_v9.validation.ledger import EvidenceLedger
+from gold_cio_v9.validation.macro_calendar import build_macro_calendar_snapshot
 from gold_cio_v9.validation.trials import TrialsRegistry
 
 
 def _bars():
     t0 = datetime(2025, 1, 1, tzinfo=timezone.utc)
-    return tuple(
-        HistoricalBar(
-            instrument="GC", contract="GCG5", event_time=t0 + timedelta(minutes=i),
-            open=100, high=101, low=99, close=100, volume=10,
-            quality_state=QualityState.VERIFIED, source_id="TEST",
-            roll_method=RollMethod.RAW_CONTRACT,
-        )
-        for i in range(3)
-    )
+    return tuple(HistoricalBar(
+        instrument="GC", contract="GCG5", event_time=t0 + timedelta(minutes=i),
+        open=100, high=101, low=99, close=100, volume=10,
+        quality_state=QualityState.VERIFIED, source_id="TEST", roll_method=RollMethod.RAW_CONTRACT,
+    ) for i in range(3))
+
+
+def _macro(start=date(2025, 1, 1), end=date(2025, 1, 2)):
+    return build_macro_calendar_snapshot(coverage_start=start, coverage_end=end, source_id="calendar:test", events=())
 
 
 def _validation():
@@ -55,7 +54,6 @@ def test_formal_orchestrator_registers_before_results_and_ledgers_before_return(
     calls = []
 
     def fake_book(*, bars, costs):
-        # Formal invariant: trial already exists before outcomes are generated.
         assert len(registry.read_all()) == 1
         calls.append(costs.stress_multiple)
         return object()
@@ -68,7 +66,7 @@ def test_formal_orchestrator_registers_before_results_and_ledgers_before_return(
 
     out = formal.run_formal_exp0001_test(
         bars=bars, dataset_manifest=manifest, acquisition_lineage=lineage,
-        macro_events=(), base_costs=CostAssumptions(0.1, 0.1, 0.1),
+        macro_calendar=_macro(), base_costs=CostAssumptions(0.1, 0.1, 0.1),
         trial_registry=registry, evidence_ledger=ledger, git_commit="abc123",
     )
     assert calls == [1.0, 1.5]
@@ -88,9 +86,23 @@ def test_manifest_mismatch_fails_before_trial_registration(tmp_path):
     with pytest.raises(ValueError, match="manifest does not match"):
         formal.run_formal_exp0001_test(
             bars=bars, dataset_manifest=bad, acquisition_lineage=lineage,
-            macro_events=(), base_costs=CostAssumptions(0.1, 0.1, 0.1),
-            trial_registry=registry, evidence_ledger=EvidenceLedger(tmp_path / "ledger.jsonl"),
-            git_commit="abc",
+            macro_calendar=_macro(), base_costs=CostAssumptions(0.1, 0.1, 0.1),
+            trial_registry=registry, evidence_ledger=EvidenceLedger(tmp_path / "ledger.jsonl"), git_commit="abc",
+        )
+    assert registry.read_all() == []
+
+
+def test_macro_coverage_mismatch_fails_before_trial_registration(tmp_path):
+    bars = _bars()
+    manifest = build_gc_dataset_manifest(bars)
+    lineage = AcquisitionLineageManifest(5, 1, (), (), manifest.dataset_hash, "lineage")
+    registry = TrialsRegistry(tmp_path / "trials.jsonl")
+    bad_macro = _macro(start=date(2024, 12, 1), end=date(2024, 12, 31))
+    with pytest.raises(ValueError, match="does not cover"):
+        formal.run_formal_exp0001_test(
+            bars=bars, dataset_manifest=manifest, acquisition_lineage=lineage,
+            macro_calendar=bad_macro, base_costs=CostAssumptions(0.1, 0.1, 0.1),
+            trial_registry=registry, evidence_ledger=EvidenceLedger(tmp_path / "ledger.jsonl"), git_commit="abc",
         )
     assert registry.read_all() == []
 
@@ -102,7 +114,7 @@ def test_nonbase_cost_multiple_fails_closed(tmp_path):
     with pytest.raises(ValueError, match="stress_multiple=1.0"):
         formal.run_formal_exp0001_test(
             bars=bars, dataset_manifest=manifest, acquisition_lineage=lineage,
-            macro_events=(), base_costs=CostAssumptions(0.1, 0.1, 0.1, 1.5),
+            macro_calendar=_macro(), base_costs=CostAssumptions(0.1, 0.1, 0.1, 1.5),
             trial_registry=TrialsRegistry(tmp_path / "trials.jsonl"),
             evidence_ledger=EvidenceLedger(tmp_path / "ledger.jsonl"), git_commit="abc",
         )
