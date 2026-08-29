@@ -9,20 +9,30 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from gold_cio_v9.backtest.costs import CostAssumptions
+from gold_cio_v9.data.contract_master import ContractMaster, build_gc_contract_master
 from gold_cio_v9.data.dataset_manifest import build_gc_dataset_manifest
-from gold_cio_v9.data.evidence_lineage import AcquisitionLineageManifest, RollDecisionLineage
+from gold_cio_v9.data.evidence_lineage import (
+    AcquisitionLineageManifest,
+    RollDecisionLineage,
+    assert_acquisition_lineage_integrity,
+)
 from gold_cio_v9.data.governance import HistoricalBar, QualityState, RollMethod
-from gold_cio_v9.experiments.exp0001_locked import assert_locked_costs
+from gold_cio_v9.experiments.exp0001_locked import (
+    IMPLEMENTATION_POLICY_ID,
+    VALIDATION_POLICY_ID,
+    assert_locked_costs,
+)
 from gold_cio_v9.validation.exp0001_regimes import MacroEvent
 from gold_cio_v9.validation.macro_calendar import MacroCalendarSnapshot, build_macro_calendar_snapshot, validate_macro_calendar_for_bars
 
-BUNDLE_SCHEMA = "gold-cio-exp0001-evidence-bundle-v4"
+BUNDLE_SCHEMA = "gold-cio-exp0001-evidence-bundle-v5"
 
 
 @dataclass(frozen=True)
 class EvidenceBundle:
     bars: tuple[HistoricalBar, ...]
     acquisition_lineage: AcquisitionLineageManifest
+    contract_master: ContractMaster
     macro_calendar: MacroCalendarSnapshot
     base_costs: CostAssumptions
     dataset_hash: str
@@ -43,7 +53,24 @@ def _bar_payload(b: HistoricalBar) -> dict[str, Any]:
     }
 
 
+def _master_payload(master: ContractMaster) -> dict[str, Any]:
+    return {
+        "master_hash": master.master_hash,
+        "specs": [
+            {
+                "ticker": s.ticker,
+                "product_code": "GC",
+                "first_trade_date": s.first_trade_date.isoformat(),
+                "last_trade_date": s.last_trade_date.isoformat(),
+                "settlement_date": s.settlement_date.isoformat(),
+            }
+            for s in master.specs
+        ],
+    }
+
+
 def _lineage_payload(m: AcquisitionLineageManifest) -> dict[str, Any]:
+    assert_acquisition_lineage_integrity(m)
     if not m.contract_master_hash.strip():
         raise ValueError("contract_master_hash is required for formal evidence bundles")
     return {
@@ -73,20 +100,29 @@ def _macro_payload(m: MacroCalendarSnapshot) -> dict[str, Any]:
 
 def canonical_bundle_payload(
     *, bars: Sequence[HistoricalBar], acquisition_lineage: AcquisitionLineageManifest,
-    macro_calendar: MacroCalendarSnapshot, base_costs: CostAssumptions,
+    contract_master: ContractMaster, macro_calendar: MacroCalendarSnapshot,
+    base_costs: CostAssumptions,
 ) -> dict[str, Any]:
     materialized = tuple(bars)
     manifest = build_gc_dataset_manifest(materialized)
     if acquisition_lineage.dataset_hash != manifest.dataset_hash:
         raise ValueError("acquisition lineage does not bind to authoritative bars")
-    if not acquisition_lineage.contract_master_hash.strip():
-        raise ValueError("contract_master_hash is required for formal evidence bundles")
+    assert_acquisition_lineage_integrity(acquisition_lineage)
+    if contract_master.master_hash != acquisition_lineage.contract_master_hash:
+        raise ValueError("contract master does not bind to acquisition lineage")
+    replay_master = build_gc_contract_master(_master_payload(contract_master)["specs"])
+    if replay_master.master_hash != contract_master.master_hash:
+        raise ValueError("contract master hash mismatch")
     validate_macro_calendar_for_bars(macro_calendar, materialized)
     assert_locked_costs(base_costs)
     return {
         "schema": BUNDLE_SCHEMA,
+        "experiment_id": "EXP-0001",
+        "implementation_policy": IMPLEMENTATION_POLICY_ID,
+        "validation_policy": VALIDATION_POLICY_ID,
         "dataset_hash": manifest.dataset_hash,
         "bars": [_bar_payload(b) for b in materialized],
+        "contract_master": _master_payload(contract_master),
         "acquisition_lineage": _lineage_payload(acquisition_lineage),
         "macro_calendar": _macro_payload(macro_calendar),
         "base_costs": asdict(base_costs),
@@ -95,20 +131,25 @@ def canonical_bundle_payload(
 
 def build_evidence_bundle(
     *, bars: Sequence[HistoricalBar], acquisition_lineage: AcquisitionLineageManifest,
-    macro_calendar: MacroCalendarSnapshot, base_costs: CostAssumptions,
+    contract_master: ContractMaster, macro_calendar: MacroCalendarSnapshot,
+    base_costs: CostAssumptions,
 ) -> EvidenceBundle:
     materialized = tuple(bars)
     payload = canonical_bundle_payload(
         bars=materialized, acquisition_lineage=acquisition_lineage,
-        macro_calendar=macro_calendar, base_costs=base_costs,
+        contract_master=contract_master, macro_calendar=macro_calendar, base_costs=base_costs,
     )
-    return EvidenceBundle(materialized, acquisition_lineage, macro_calendar, base_costs, payload["dataset_hash"], _stable_hash(payload))
+    return EvidenceBundle(
+        materialized, acquisition_lineage, contract_master, macro_calendar,
+        base_costs, payload["dataset_hash"], _stable_hash(payload),
+    )
 
 
 def dump_evidence_bundle(bundle: EvidenceBundle, path: str | Path) -> None:
     payload = canonical_bundle_payload(
         bars=bundle.bars, acquisition_lineage=bundle.acquisition_lineage,
-        macro_calendar=bundle.macro_calendar, base_costs=bundle.base_costs,
+        contract_master=bundle.contract_master, macro_calendar=bundle.macro_calendar,
+        base_costs=bundle.base_costs,
     )
     computed = _stable_hash(payload)
     if computed != bundle.bundle_hash or payload["dataset_hash"] != bundle.dataset_hash:
@@ -142,6 +183,12 @@ def load_evidence_bundle(path: str | Path) -> EvidenceBundle:
     payload = _require_map(envelope.get("payload"), "payload")
     if payload.get("schema") != BUNDLE_SCHEMA:
         raise ValueError("unsupported evidence bundle schema")
+    if payload.get("experiment_id") != "EXP-0001":
+        raise ValueError("unexpected evidence experiment id")
+    if payload.get("implementation_policy") != IMPLEMENTATION_POLICY_ID:
+        raise ValueError("evidence bundle implementation policy mismatch")
+    if payload.get("validation_policy") != VALIDATION_POLICY_ID:
+        raise ValueError("evidence bundle validation policy mismatch")
     expected_hash = envelope.get("bundle_hash")
     if not isinstance(expected_hash, str) or _stable_hash(payload) != expected_hash:
         raise ValueError("evidence bundle hash mismatch")
@@ -156,6 +203,14 @@ def load_evidence_bundle(path: str | Path) -> EvidenceBundle:
         quality_state=QualityState(r["quality_state"]), source_id=str(r["source_id"]),
         roll_method=RollMethod(r["roll_method"]), is_roll_window=bool(r.get("is_roll_window", False)),
     ) for r in bars_raw)
+
+    master_raw = _require_map(payload.get("contract_master"), "contract_master")
+    specs_raw = master_raw.get("specs")
+    if not isinstance(specs_raw, list) or not specs_raw:
+        raise ValueError("contract master specs are required")
+    contract_master = build_gc_contract_master(specs_raw)
+    if contract_master.master_hash != master_raw.get("master_hash"):
+        raise ValueError("contract master hash mismatch")
 
     lm = _require_map(payload.get("acquisition_lineage"), "acquisition_lineage")
     decisions_raw = lm.get("decisions")
@@ -177,6 +232,9 @@ def load_evidence_bundle(path: str | Path) -> EvidenceBundle:
         str(lm["dataset_hash"]), str(lm["lineage_hash"]),
         int(lm["max_settlement_days_forward"]), master_hash,
     )
+    assert_acquisition_lineage_integrity(lineage)
+    if lineage.contract_master_hash != contract_master.master_hash:
+        raise ValueError("contract master does not bind to acquisition lineage")
 
     mm = _require_map(payload.get("macro_calendar"), "macro_calendar")
     events_raw = mm.get("events")
@@ -199,7 +257,12 @@ def load_evidence_bundle(path: str | Path) -> EvidenceBundle:
         raise ValueError("bundle dataset hash does not match bars")
     if lineage.dataset_hash != manifest.dataset_hash:
         raise ValueError("lineage dataset hash does not match bars")
-    rebuilt = canonical_bundle_payload(bars=bars, acquisition_lineage=lineage, macro_calendar=macro, base_costs=costs)
+    rebuilt = canonical_bundle_payload(
+        bars=bars, acquisition_lineage=lineage, contract_master=contract_master,
+        macro_calendar=macro, base_costs=costs,
+    )
     if _stable_hash(rebuilt) != expected_hash:
         raise ValueError("bundle canonical replay mismatch")
-    return EvidenceBundle(bars, lineage, macro, costs, manifest.dataset_hash, expected_hash)
+    return EvidenceBundle(
+        bars, lineage, contract_master, macro, costs, manifest.dataset_hash, expected_hash,
+    )
