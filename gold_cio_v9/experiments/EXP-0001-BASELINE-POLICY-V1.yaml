@@ -1,0 +1,40 @@
+id: EXP-0001-BASELINE-POLICY-V1
+experiment_id: EXP-0001
+status: LOCKED_BEFORE_OUTCOMES
+instrument: GC
+frequency: 1m
+purpose: >
+  Freeze implementation choices that were underspecified in EXP-0001 before any
+  strategy outcome is evaluated. Any post-outcome change requires a new policy ID
+  and is treated as a new trial/hypothesis family.
+causal_inputs:
+  atr_period: 14
+  swing_left_bars: 2
+  swing_right_bars: 2
+  trend_rule: >
+    BULLISH only when the latest two already-confirmed swing highs and latest two
+    already-confirmed swing lows are both higher; BEARISH only when both are lower;
+    mixed or insufficient structure is unclassified.
+  htf_location_rule: >
+    Use only the completed prior UTC day range. LONG permission requires retest
+    close at or below the prior-day midpoint (discount). SHORT permission requires
+    retest close at or above the prior-day midpoint (premium).
+  reference_liquidity: prior_completed_day_high_low
+labels:
+  horizons_minutes: [5, 15, 30, 60]
+  horizon_semantics: wall_clock_minutes_not_observed_bar_count
+futures_chain:
+  roll_buffer_days: 5
+  selection: highest_completed_prior_session_volume_among_eligible_contracts
+  tie_break: nearest_settlement_then_ticker
+  current_session_volume_allowed: false
+  open_interest_hindsight_allowed: false
+  adjusted_continuous_prices_allowed: false
+execution:
+  setup_order: HTF_LOCATION_SWEEP_MSS_FVG_LATER_RETEST
+  same_bar_fvg_retest_allowed: false
+  cross_contract_outcomes_allowed: false
+governance:
+  tune_after_outcomes: false
+  choose_best_horizon_post_hoc: false
+  all_horizons_reported: true
