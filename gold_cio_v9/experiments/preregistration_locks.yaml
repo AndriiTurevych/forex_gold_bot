@@ -2,8 +2,8 @@ version: 1
 program: gold-cio-v9
 policy: >
   A preregistered experiment is immutable. Any change to hypothesis, instrument,
-  features, thresholds, segmentation, labels, or validation protocol requires a
-  new EXP-XXXX identifier and a new preregistration.
+  features, thresholds, segmentation, labels, validation protocol, or locked
+  implementation policy requires a new EXP-XXXX or new versioned policy identifier.
 experiments:
   EXP-0001:
     path: gold_cio_v9/experiments/EXP-0001.yaml
@@ -15,3 +15,9 @@ experiments:
     verdict_transfer_allowed: false
     post_accept_modification_allowed: false
     post_reject_modification_allowed: false
+    implementation_policy:
+      id: EXP-0001-BASELINE-POLICY-V1
+      path: gold_cio_v9/experiments/EXP-0001-BASELINE-POLICY-V1.yaml
+      registered_blob_sha: f34d4f9d15c4db909a992017ef842476af3441e2
+      status: LOCKED_BEFORE_OUTCOMES
+      post_outcome_modification_allowed: false
