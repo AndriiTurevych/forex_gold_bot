@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Mapping, Sequence
 
 from gold_cio_v9.data.governance import HistoricalBar, eligible_for_signal_generation
+from gold_cio_v9.experiments.exp0001_inputs import DirectionalPermission
 from gold_cio_v9.experiments.exp0001_replay import ReplaySetup
 from gold_cio_v9.experiments.exp0001_stream import ContextPoint, StreamEvent
 from gold_cio_v9.ict_engine.features import Bar
@@ -39,7 +40,7 @@ def assemble_replay_setups(
     bars: Sequence[HistoricalBar],
     events: Sequence[StreamEvent],
     context: Sequence[ContextPoint],
-    htf_permission: Mapping[int, bool],
+    htf_permission: Mapping[int, DirectionalPermission],
     horizon_bars: int,
 ) -> tuple[ReplaySetup, ...]:
     """Assemble time-ordered EXP-0001 setups without discretionary repair.
@@ -52,6 +53,7 @@ def assemble_replay_setups(
     - a new sweep replaces any unfinished sequence for the same direction.
     - all components must remain on the same raw futures contract.
     - opposing liquidity is the contemporaneous opposite reference level.
+    - HTF permission is directional: LONG/SHORT cannot share one ambiguous bool.
     """
     if horizon_bars <= 0:
         raise ValueError("horizon_bars must be positive")
@@ -61,9 +63,16 @@ def assemble_replay_setups(
         raise ValueError("events must be strictly ordered")
 
     ctx = {c.index: c for c in context}
+    if len(ctx) != len(context):
+        raise ValueError("duplicate context indices")
+    if any(i < 0 or i >= len(bars) for i in ctx):
+        raise ValueError("context index outside bars")
+
     event_by_index = {e.index: e for e in events}
     if len(event_by_index) != len(events):
         raise ValueError("duplicate event indices")
+    if any(i < 0 or i >= len(bars) for i in event_by_index):
+        raise ValueError("event index outside bars")
 
     pending: dict[str, _Pending | None] = {"LONG": None, "SHORT": None}
     out: list[ReplaySetup] = []
@@ -108,11 +117,12 @@ def assemble_replay_setups(
                     pending[direction] = None
                     continue
                 target = c_now.reference_high if direction == "LONG" else c_now.reference_low
+                permission = htf_permission.get(i, DirectionalPermission(False, False))
                 out.append(
                     ReplaySetup(
                         setup_id=f"EXP-0001-{direction}-{h.event_time.isoformat()}",
                         signal_index=i,
-                        htf_location_ok=bool(htf_permission.get(i, False)),
+                        htf_location_ok=permission.allows(direction),
                         sweep=p.sweep,
                         structure=p.structure,
                         zone=p.zone,
