@@ -7,6 +7,7 @@ from gold_cio_v9.backtest.costs import CostAssumptions
 from gold_cio_v9.data.dataset_manifest import build_gc_dataset_manifest
 from gold_cio_v9.data.evidence_lineage import AcquisitionLineageManifest, RollDecisionLineage
 from gold_cio_v9.data.governance import HistoricalBar, QualityState, RollMethod
+from gold_cio_v9.experiments.exp0001_locked import LOCKED_BASE_COSTS
 from gold_cio_v9.validation.evidence_bundle import build_evidence_bundle, dump_evidence_bundle, load_evidence_bundle
 from gold_cio_v9.validation.macro_calendar import build_macro_calendar_snapshot
 
@@ -24,7 +25,7 @@ def _bars():
 def _lineage(bars, *, master_hash="master-locked-hash"):
     m = build_gc_dataset_manifest(bars)
     return AcquisitionLineageManifest(
-        5, 1,
+        5, 0,
         (RollDecisionLineage("2025-06-02", "2025-05-30", "GCQ5", (("GCM5", 1240.0), ("GCQ5", 179229.0))),),
         (("GCQ5", "2025-06-02", "2025-06-02"),),
         m.dataset_hash, "lineage-locked-hash", 365, master_hash,
@@ -38,13 +39,9 @@ def _macro():
     )
 
 
-def _costs():
-    return CostAssumptions(0.1, 0.05, 0.05, 1.0)
-
-
 def test_bundle_round_trip_is_deterministic(tmp_path):
     bars = _bars()
-    bundle = build_evidence_bundle(bars=bars, acquisition_lineage=_lineage(bars), macro_calendar=_macro(), base_costs=_costs())
+    bundle = build_evidence_bundle(bars=bars, acquisition_lineage=_lineage(bars), macro_calendar=_macro(), base_costs=LOCKED_BASE_COSTS)
     p = tmp_path / "evidence.json"
     dump_evidence_bundle(bundle, p)
     loaded = load_evidence_bundle(p)
@@ -53,13 +50,14 @@ def test_bundle_round_trip_is_deterministic(tmp_path):
     assert loaded.bars == bars
     assert loaded.acquisition_lineage.contract_master_hash == "master-locked-hash"
     assert loaded.acquisition_lineage.max_settlement_days_forward == 365
+    assert loaded.acquisition_lineage.roll_buffer_bars == 0
     assert loaded.macro_calendar.calendar_hash == _macro().calendar_hash
-    assert loaded.base_costs == _costs()
+    assert loaded.base_costs == LOCKED_BASE_COSTS
 
 
 def test_price_tamper_is_rejected(tmp_path):
     bars = _bars()
-    bundle = build_evidence_bundle(bars=bars, acquisition_lineage=_lineage(bars), macro_calendar=_macro(), base_costs=_costs())
+    bundle = build_evidence_bundle(bars=bars, acquisition_lineage=_lineage(bars), macro_calendar=_macro(), base_costs=LOCKED_BASE_COSTS)
     p = tmp_path / "evidence.json"
     dump_evidence_bundle(bundle, p)
     raw = json.loads(p.read_text())
@@ -71,7 +69,7 @@ def test_price_tamper_is_rejected(tmp_path):
 
 def test_macro_calendar_hash_tamper_is_rejected(tmp_path):
     bars = _bars()
-    bundle = build_evidence_bundle(bars=bars, acquisition_lineage=_lineage(bars), macro_calendar=_macro(), base_costs=_costs())
+    bundle = build_evidence_bundle(bars=bars, acquisition_lineage=_lineage(bars), macro_calendar=_macro(), base_costs=LOCKED_BASE_COSTS)
     p = tmp_path / "evidence.json"
     dump_evidence_bundle(bundle, p)
     raw = json.loads(p.read_text())
@@ -87,15 +85,15 @@ def test_macro_calendar_hash_tamper_is_rejected(tmp_path):
 def test_lineage_dataset_mismatch_fails_before_bundle_creation():
     bars = _bars()
     good = _lineage(bars)
-    bad = AcquisitionLineageManifest(5, 1, good.decisions, good.fetch_windows, "wrong", "lineage", 365, "master")
+    bad = AcquisitionLineageManifest(5, 0, good.decisions, good.fetch_windows, "wrong", "lineage", 365, "master")
     with pytest.raises(ValueError, match="lineage does not bind"):
-        build_evidence_bundle(bars=bars, acquisition_lineage=bad, macro_calendar=_macro(), base_costs=_costs())
+        build_evidence_bundle(bars=bars, acquisition_lineage=bad, macro_calendar=_macro(), base_costs=LOCKED_BASE_COSTS)
 
 
 def test_missing_contract_master_hash_fails_before_bundle_creation():
     bars = _bars()
     with pytest.raises(ValueError, match="contract_master_hash"):
-        build_evidence_bundle(bars=bars, acquisition_lineage=_lineage(bars, master_hash=""), macro_calendar=_macro(), base_costs=_costs())
+        build_evidence_bundle(bars=bars, acquisition_lineage=_lineage(bars, master_hash=""), macro_calendar=_macro(), base_costs=LOCKED_BASE_COSTS)
 
 
 def test_macro_coverage_gap_is_rejected_before_bundle_creation():
@@ -105,13 +103,13 @@ def test_macro_coverage_gap_is_rejected_before_bundle_creation():
         source_id="calendar:incomplete", events=(),
     )
     with pytest.raises(ValueError, match="does not cover"):
-        build_evidence_bundle(bars=bars, acquisition_lineage=_lineage(bars), macro_calendar=incomplete, base_costs=_costs())
+        build_evidence_bundle(bars=bars, acquisition_lineage=_lineage(bars), macro_calendar=incomplete, base_costs=LOCKED_BASE_COSTS)
 
 
-def test_non_base_stress_costs_are_rejected():
+def test_non_locked_costs_are_rejected():
     bars = _bars()
-    with pytest.raises(ValueError, match="stress_multiple=1.0"):
+    with pytest.raises(ValueError, match="diverge from locked baseline V5"):
         build_evidence_bundle(
             bars=bars, acquisition_lineage=_lineage(bars), macro_calendar=_macro(),
-            base_costs=CostAssumptions(0.1, 0.05, 0.05, 1.5),
+            base_costs=CostAssumptions(0.1, 0.05, 0.05, 1.0),
         )
