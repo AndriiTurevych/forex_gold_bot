@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the locked EXP-0001 formal test from one hash-bound evidence bundle."""
+"""Run the locked EXP-0001 test from one hash-bound evidence bundle."""
 from __future__ import annotations
 
 import argparse
@@ -8,10 +8,15 @@ import json
 from pathlib import Path
 
 from gold_cio_v9.data.dataset_manifest import build_gc_dataset_manifest
+from gold_cio_v9.validation.binding_governance import load_binding_governance_attestation, require_binding_governance
 from gold_cio_v9.validation.evidence_bundle import load_evidence_bundle
 from gold_cio_v9.validation.exp0001_full_test import run_formal_exp0001_test
 from gold_cio_v9.validation.ledger import EvidenceLedger
+from gold_cio_v9.validation.test_readiness import require_exp0001_test_ready
 from gold_cio_v9.validation.trials import TrialsRegistry
+
+EXPECTED_REPOSITORY = "AndriiTurevych/forex_gold_bot"
+EXPECTED_BRANCH = "gold-cio-v9"
 
 
 def main() -> int:
@@ -21,9 +26,26 @@ def main() -> int:
     p.add_argument("--trials", required=True)
     p.add_argument("--ledger", required=True)
     p.add_argument("--output", required=True)
+    p.add_argument("--mode", choices=("nonbinding", "binding"), default="nonbinding")
+    p.add_argument("--governance-attestation")
     args = p.parse_args()
 
     bundle = load_evidence_bundle(args.bundle)
+    readiness = require_exp0001_test_ready(bundle)
+
+    governance_hash = None
+    if args.mode == "binding":
+        if not args.governance_attestation:
+            raise ValueError("binding mode requires --governance-attestation")
+        att = load_binding_governance_attestation(args.governance_attestation)
+        require_binding_governance(
+            att,
+            expected_repository=EXPECTED_REPOSITORY,
+            expected_branch=EXPECTED_BRANCH,
+            expected_head_sha=args.git_commit,
+        )
+        governance_hash = att.attestation_hash
+
     manifest = build_gc_dataset_manifest(bundle.bars)
     outcome = run_formal_exp0001_test(
         bars=bundle.bars,
@@ -36,8 +58,14 @@ def main() -> int:
         git_commit=args.git_commit,
     )
     result = {
+        "mode": args.mode,
+        "binding": args.mode == "binding",
+        "governance_attestation_hash": governance_hash,
+        "readiness": asdict(readiness),
         "bundle_hash": bundle.bundle_hash,
         "dataset_hash": bundle.dataset_hash,
+        "contract_master_hash": bundle.acquisition_lineage.contract_master_hash,
+        "lineage_hash": bundle.acquisition_lineage.lineage_hash,
         "macro_calendar_hash": bundle.macro_calendar.calendar_hash,
         "macro_source_id": bundle.macro_calendar.source_id,
         "verdict": outcome.verdict,
@@ -51,7 +79,12 @@ def main() -> int:
         "diagnostics": asdict(outcome.validation.diagnostics),
     }
     Path(args.output).write_text(json.dumps(result, sort_keys=True, indent=2, allow_nan=False), encoding="utf-8")
-    print(json.dumps({"verdict": outcome.verdict, "trial_id": outcome.trial.trial_id, "result_hash": outcome.result_hash}, sort_keys=True))
+    print(json.dumps({
+        "mode": args.mode,
+        "verdict": outcome.verdict,
+        "trial_id": outcome.trial.trial_id,
+        "result_hash": outcome.result_hash,
+    }, sort_keys=True))
     return 0
 
 
