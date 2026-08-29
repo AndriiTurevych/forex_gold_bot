@@ -21,3 +21,9 @@ experiments:
       registered_blob_sha: f34d4f9d15c4db909a992017ef842476af3441e2
       status: LOCKED_BEFORE_OUTCOMES
       post_outcome_modification_allowed: false
+    validation_policy:
+      id: EXP-0001-VALIDATION-POLICY-V1
+      path: gold_cio_v9/experiments/EXP-0001-VALIDATION-POLICY-V1.yaml
+      registered_blob_sha: 571d6e4ec7b5162e89111ed410c6d0134dbe81f7
+      status: LOCKED_BEFORE_OUTCOMES
+      post_outcome_modification_allowed: false
