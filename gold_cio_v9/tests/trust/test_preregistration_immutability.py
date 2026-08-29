@@ -14,17 +14,41 @@ from gold_cio_v9.validation.preregistration import (
 LOCK_PATH = Path("gold_cio_v9/experiments/preregistration_locks.yaml")
 
 
+def _experiment():
+    raw = yaml.safe_load(LOCK_PATH.read_text(encoding="utf-8"))
+    return raw["experiments"]["EXP-0001"]
+
+
 def test_exp0001_preregistration_matches_locked_blob():
     lock = load_lock(LOCK_PATH, "EXP-0001")
     assert_preregistration_immutable(lock)
 
 
 def test_exp0001_baseline_policy_matches_locked_blob():
-    raw = yaml.safe_load(LOCK_PATH.read_text(encoding="utf-8"))
-    policy = raw["experiments"]["EXP-0001"]["implementation_policy"]
+    policy = _experiment()["implementation_policy"]
     assert policy["status"] == "LOCKED_BEFORE_OUTCOMES"
     assert policy["post_outcome_modification_allowed"] is False
     assert git_blob_sha(policy["path"]) == policy["registered_blob_sha"]
+
+
+def test_exp0001_active_validation_policy_v4_matches_locked_blob():
+    policy = _experiment()["validation_policy"]
+    assert policy["id"] == "EXP-0001-VALIDATION-POLICY-V4"
+    assert policy["status"] == "LOCKED_BEFORE_OUTCOMES"
+    assert policy["post_outcome_modification_allowed"] is False
+    assert git_blob_sha(policy["path"]) == policy["registered_blob_sha"]
+
+
+def test_superseded_validation_policies_remain_hash_auditable():
+    history = _experiment()["validation_policy_history"]
+    assert [p["id"] for p in history] == [
+        "EXP-0001-VALIDATION-POLICY-V1",
+        "EXP-0001-VALIDATION-POLICY-V2",
+        "EXP-0001-VALIDATION-POLICY-V3",
+    ]
+    for policy in history:
+        assert policy["status"] == "SUPERSEDED_BEFORE_OUTCOMES"
+        assert git_blob_sha(policy["path"]) == policy["registered_blob_sha"]
 
 
 def test_exp0001_verdict_is_bound_to_gc():
