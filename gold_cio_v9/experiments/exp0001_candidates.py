@@ -33,11 +33,15 @@ def build_trade_candidate(
 ) -> TradeCandidate:
     """Create a fail-closed candidate using locked structural geometry.
 
-    LONG: stop = swept SSL extreme, target = opposing buy-side liquidity.
-    SHORT: stop = swept BSL extreme, target = opposing sell-side liquidity.
+    ``horizon_bars`` is retained in the call signature for compatibility with the
+    locked EXP-0001 layers, but EXP-0001 preregistration defines wall-clock minute
+    horizons. Therefore the same positive value is persisted as ``horizon_minutes``
+    and the backtest runner labels by elapsed time, not by number of observed bars.
     """
     if not isfinite(opposing_liquidity):
         raise ValueError("opposing_liquidity must be finite")
+    if horizon_bars <= 0:
+        raise ValueError("horizon must be positive")
     stop = swept_extreme(signal, sweep_depth=sweep_depth)
     entry = signal.entry_price
     if signal.direction == "LONG":
@@ -58,4 +62,5 @@ def build_trade_candidate(
         stop=stop,
         target=target,
         horizon_bars=horizon_bars,
+        horizon_minutes=horizon_bars,
     )
