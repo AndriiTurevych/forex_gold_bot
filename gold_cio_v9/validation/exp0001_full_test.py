@@ -19,7 +19,7 @@ from gold_cio_v9.validation.ledger import EvidenceLedger, EvidenceRecord
 from gold_cio_v9.validation.macro_calendar import MacroCalendarSnapshot, validate_macro_calendar_for_bars
 from gold_cio_v9.validation.trials import TrialRecord, TrialsRegistry
 
-IMPLEMENTATION_POLICY = "EXP-0001-BASELINE-POLICY-V3"
+IMPLEMENTATION_POLICY = "EXP-0001-BASELINE-POLICY-V4"
 VALIDATION_POLICY = "EXP-0001-VALIDATION-POLICY-V5"
 STRESS_MULTIPLE = 1.5
 
@@ -124,7 +124,6 @@ def run_formal_exp0001_test(
         "stress_multiple": STRESS_MULTIPLE,
     }
 
-    # Register before any strategy outcome generation.
     trial = trial_registry.register(
         experiment_id="EXP-0001", config=config,
         data_snapshot_hash=data_snapshot_hash, git_commit=git_commit,
@@ -156,7 +155,6 @@ def run_formal_exp0001_test(
         "failed_gates": decision.failed_gates,
     })
 
-    # Ledger first: no outcome object exists outside this function before persistence.
     record = evidence_ledger.append(
         experiment_id="EXP-0001", trial_id=trial.trial_id, git_commit=git_commit,
         data_snapshot_hash=data_snapshot_hash, candidate_snapshot_hash=candidate_snapshot_hash,
