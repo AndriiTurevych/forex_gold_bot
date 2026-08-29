@@ -19,7 +19,16 @@ def srow(ticker, session_date, volume):
 
 def bar(ticker, d, minute, px):
     ts = int(datetime(d.year, d.month, d.day, 12, minute, tzinfo=timezone.utc).timestamp() * 1_000_000_000)
-    return {"ticker": ticker, "window_start": ts, "open": px, "high": px + 1, "low": px - 1, "close": px + .5, "volume": 10}
+    return {
+        "ticker": ticker,
+        "session_end_date": d.isoformat(),
+        "window_start": ts,
+        "open": px,
+        "high": px + 1,
+        "low": px - 1,
+        "close": px + .5,
+        "volume": 10,
+    }
 
 
 def fixture():
