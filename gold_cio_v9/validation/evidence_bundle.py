@@ -100,16 +100,21 @@ def build_evidence_bundle(
     macro_events: Sequence[MacroEvent],
     base_costs: CostAssumptions,
 ) -> EvidenceBundle:
+    materialized_bars = tuple(bars)
+    materialized_macro = tuple(sorted(macro_events, key=lambda x: (x.event_time, x.category, x.known_at)))
     payload = canonical_bundle_payload(
-        bars=bars,
+        bars=materialized_bars,
         acquisition_lineage=acquisition_lineage,
-        macro_events=macro_events,
+        macro_events=materialized_macro,
         base_costs=base_costs,
     )
     return EvidenceBundle(
-        tuple(bars), tuple(macro_events) and acquisition_lineage or acquisition_lineage,
-        tuple(sorted(macro_events, key=lambda x: (x.event_time, x.category, x.known_at))),
-        base_costs, payload["dataset_hash"], _stable_hash(payload),
+        materialized_bars,
+        acquisition_lineage,
+        materialized_macro,
+        base_costs,
+        payload["dataset_hash"],
+        _stable_hash(payload),
     )
 
 
