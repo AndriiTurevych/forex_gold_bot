@@ -1,0 +1,68 @@
+id: EXP-0001-BASELINE-POLICY-V5
+experiment_id: EXP-0001
+supersedes: EXP-0001-BASELINE-POLICY-V4
+status: LOCKED_BEFORE_OUTCOMES
+instrument: GC
+frequency: 1m
+reason_for_version: >
+  V4 finalized the immutable contract-master roll process and zero additional
+  bar-level roll blackout, but the formal base transaction-cost values were still
+  caller supplied. V5 freezes the exact broker-independent conservative GC cost
+  assumptions before any strategy outcome is inspected, preventing cost shopping
+  after results. The strategy logic, horizons, roll methodology and validation
+  thresholds are unchanged.
+causal_inputs:
+  atr_period: 14
+  swing_left_bars: 2
+  swing_right_bars: 2
+  trend_rule: >
+    BULLISH only when the latest two already-confirmed swing highs and latest two
+    already-confirmed swing lows are both higher; BEARISH only when both are lower;
+    mixed or insufficient structure is unclassified.
+  htf_location_rule: >
+    Use only the completed prior UTC day range. LONG permission requires retest
+    close at or below the prior-day midpoint (discount). SHORT permission requires
+    retest close at or above the prior-day midpoint (premium).
+  reference_liquidity: prior_completed_day_high_low
+labels:
+  horizons_minutes: [5, 15, 30, 60]
+  horizon_semantics: wall_clock_minutes_not_observed_bar_count
+futures_chain:
+  contract_registry: immutable_hash_bound_outright_gc_master
+  provider_active_flag_used_for_eligibility: false
+  eligibility_rule: first_trade_date_lte_as_of_lte_last_trade_date_minus_roll_buffer
+  roll_buffer_days: 5
+  max_settlement_days_forward: 365
+  selection: highest_completed_prior_session_volume_within_master_eligible_universe
+  missing_volume_policy: fail_closed_unless_completed_response_explicitly_means_zero
+  tie_break: nearest_settlement_then_ticker
+  current_session_volume_allowed: false
+  open_interest_hindsight_allowed: false
+  adjusted_continuous_prices_allowed: false
+execution:
+  setup_order: HTF_LOCATION_SWEEP_MSS_FVG_LATER_RETEST
+  roll_boundary_signal_blackout_bars: 0
+  causal_context_restarts_per_raw_contract: true
+  same_bar_fvg_retest_allowed: false
+  cross_contract_outcomes_allowed: false
+costs:
+  units: GC_price_points
+  contract_multiplier_usd_per_point: 100.0
+  spread_price: 0.10
+  commission_price_equivalent_round_turn: 0.05
+  slippage_price_per_side: 0.10
+  base_round_trip_cost_price: 0.35
+  base_round_trip_cost_usd_per_contract: 35.0
+  mandatory_stress_multiple: 1.5
+  stressed_round_trip_cost_price: 0.525
+  stressed_round_trip_cost_usd_per_contract: 52.5
+  rationale: >
+    Conservative broker-independent research assumptions: one minimum GC tick of
+    spread, five US dollars round-turn commission/fees expressed through the
+    100 USD per point GC multiplier, and one minimum tick of slippage on each side.
+    These values are fixed for EXP-0001 and are not broker performance claims.
+governance:
+  tune_after_outcomes: false
+  choose_best_horizon_post_hoc: false
+  all_horizons_reported: true
+  caller_cost_override_allowed_in_formal_test: false
