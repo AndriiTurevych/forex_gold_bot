@@ -15,7 +15,7 @@ from gold_cio_v9.data.governance import HistoricalBar, QualityState, RollMethod
 from gold_cio_v9.validation.exp0001_regimes import MacroEvent
 from gold_cio_v9.validation.macro_calendar import MacroCalendarSnapshot, build_macro_calendar_snapshot, validate_macro_calendar_for_bars
 
-BUNDLE_SCHEMA = "gold-cio-exp0001-evidence-bundle-v2"
+BUNDLE_SCHEMA = "gold-cio-exp0001-evidence-bundle-v3"
 
 
 @dataclass(frozen=True)
@@ -43,11 +43,17 @@ def _bar_payload(b: HistoricalBar) -> dict[str, Any]:
 
 
 def _lineage_payload(m: AcquisitionLineageManifest) -> dict[str, Any]:
+    if not m.contract_master_hash.strip():
+        raise ValueError("contract_master_hash is required for formal evidence bundles")
     return {
-        "roll_buffer_days": m.roll_buffer_days, "roll_buffer_bars": m.roll_buffer_bars,
+        "roll_buffer_days": m.roll_buffer_days,
+        "roll_buffer_bars": m.roll_buffer_bars,
+        "max_settlement_days_forward": m.max_settlement_days_forward,
+        "contract_master_hash": m.contract_master_hash,
         "decisions": [asdict(d) for d in m.decisions],
         "fetch_windows": [list(x) for x in m.fetch_windows],
-        "dataset_hash": m.dataset_hash, "lineage_hash": m.lineage_hash,
+        "dataset_hash": m.dataset_hash,
+        "lineage_hash": m.lineage_hash,
     }
 
 
@@ -72,6 +78,8 @@ def canonical_bundle_payload(
     manifest = build_gc_dataset_manifest(materialized)
     if acquisition_lineage.dataset_hash != manifest.dataset_hash:
         raise ValueError("acquisition lineage does not bind to authoritative bars")
+    if not acquisition_lineage.contract_master_hash.strip():
+        raise ValueError("contract_master_hash is required for formal evidence bundles")
     validate_macro_calendar_for_bars(macro_calendar, materialized)
     if base_costs.stress_multiple != 1.0:
         raise ValueError("bundle base costs must use stress_multiple=1.0")
@@ -160,10 +168,14 @@ def load_evidence_bundle(path: str | Path) -> EvidenceBundle:
     fetch_windows_raw = lm.get("fetch_windows")
     if not isinstance(fetch_windows_raw, list) or not fetch_windows_raw:
         raise ValueError("lineage fetch windows are required")
+    master_hash = str(lm.get("contract_master_hash", ""))
+    if not master_hash.strip():
+        raise ValueError("contract_master_hash is required in evidence lineage")
     lineage = AcquisitionLineageManifest(
         int(lm["roll_buffer_days"]), int(lm["roll_buffer_bars"]), decisions,
         tuple(tuple(str(x) for x in row) for row in fetch_windows_raw),
         str(lm["dataset_hash"]), str(lm["lineage_hash"]),
+        int(lm["max_settlement_days_forward"]), master_hash,
     )
 
     mm = _require_map(payload.get("macro_calendar"), "macro_calendar")
