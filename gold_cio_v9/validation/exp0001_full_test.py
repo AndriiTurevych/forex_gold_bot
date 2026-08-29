@@ -14,12 +14,13 @@ from gold_cio_v9.experiments.exp0001_evidence_book import EvidenceBook, build_ex
 from gold_cio_v9.validation.acceptance import evaluate_exp0001
 from gold_cio_v9.validation.evidence_run import classify_verdict
 from gold_cio_v9.validation.exp0001_full_validation import FullValidationBuild, build_validation_metrics
-from gold_cio_v9.validation.exp0001_regimes import MacroEvent, build_regime_labels
+from gold_cio_v9.validation.exp0001_regimes import build_regime_labels
 from gold_cio_v9.validation.ledger import EvidenceLedger, EvidenceRecord
+from gold_cio_v9.validation.macro_calendar import MacroCalendarSnapshot, validate_macro_calendar_for_bars
 from gold_cio_v9.validation.trials import TrialRecord, TrialsRegistry
 
 IMPLEMENTATION_POLICY = "EXP-0001-BASELINE-POLICY-V2"
-VALIDATION_POLICY = "EXP-0001-VALIDATION-POLICY-V4"
+VALIDATION_POLICY = "EXP-0001-VALIDATION-POLICY-V5"
 STRESS_MULTIPLE = 1.5
 
 
@@ -37,14 +38,6 @@ class FormalExpOutcome:
 
 def _stable_hash(payload: object) -> str:
     return sha256(json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str, allow_nan=False).encode()).hexdigest()
-
-
-def _macro_hash(events: Sequence[MacroEvent]) -> str:
-    rows = [
-        {"event_time": e.event_time.isoformat(), "known_at": e.known_at.isoformat(), "category": e.category}
-        for e in sorted(events, key=lambda x: (x.event_time, x.category, x.known_at))
-    ]
-    return _stable_hash(rows)
 
 
 def _candidate_hash(book: EvidenceBook) -> str:
@@ -89,12 +82,13 @@ def run_formal_exp0001_test(
     bars: Sequence[HistoricalBar],
     dataset_manifest: DatasetManifest,
     acquisition_lineage: AcquisitionLineageManifest,
-    macro_events: Sequence[MacroEvent],
+    macro_calendar: MacroCalendarSnapshot,
     base_costs: CostAssumptions,
     trial_registry: TrialsRegistry,
     evidence_ledger: EvidenceLedger,
     git_commit: str,
 ) -> FormalExpOutcome:
+    """Execute the locked binding test after all external evidence is hash-bound."""
     if not git_commit.strip():
         raise ValueError("git_commit is required")
     if base_costs.stress_multiple != 1.0:
@@ -106,12 +100,15 @@ def run_formal_exp0001_test(
         raise ValueError("supplied dataset manifest does not match authoritative bars")
     if acquisition_lineage.dataset_hash != dataset_manifest.dataset_hash:
         raise ValueError("acquisition lineage does not bind to dataset manifest")
+    validate_macro_calendar_for_bars(macro_calendar, materialized)
 
-    macro_calendar_hash = _macro_hash(tuple(macro_events))
     data_snapshot_hash = _stable_hash({
         "dataset_hash": dataset_manifest.dataset_hash,
         "lineage_hash": acquisition_lineage.lineage_hash,
-        "macro_calendar_hash": macro_calendar_hash,
+        "macro_calendar_hash": macro_calendar.calendar_hash,
+        "macro_source_id": macro_calendar.source_id,
+        "macro_coverage_start": macro_calendar.coverage_start.isoformat(),
+        "macro_coverage_end": macro_calendar.coverage_end.isoformat(),
     })
     config = {
         "experiment_id": "EXP-0001",
@@ -121,6 +118,7 @@ def run_formal_exp0001_test(
         "stress_multiple": STRESS_MULTIPLE,
     }
 
+    # Register before any strategy outcome generation.
     trial = trial_registry.register(
         experiment_id="EXP-0001", config=config,
         data_snapshot_hash=data_snapshot_hash, git_commit=git_commit,
@@ -132,7 +130,8 @@ def run_formal_exp0001_test(
         bars=materialized, costs=stressed_costs(base_costs, STRESS_MULTIPLE),
     )
     regimes = build_regime_labels(
-        bars=materialized, book=base_book, macro_events=tuple(macro_events), horizon_minutes=60,
+        bars=materialized, book=base_book,
+        macro_events=macro_calendar.events, horizon_minutes=60,
     )
     validation = build_validation_metrics(
         base_book=base_book, stress_1_5x_book=stress_book,
@@ -150,6 +149,8 @@ def run_formal_exp0001_test(
         "verdict": verdict,
         "failed_gates": decision.failed_gates,
     })
+
+    # Ledger first: no outcome object exists outside this function before persistence.
     record = evidence_ledger.append(
         experiment_id="EXP-0001", trial_id=trial.trial_id, git_commit=git_commit,
         data_snapshot_hash=data_snapshot_hash, candidate_snapshot_hash=candidate_snapshot_hash,
