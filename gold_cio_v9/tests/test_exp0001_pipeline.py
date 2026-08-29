@@ -6,6 +6,7 @@ import pytest
 import gold_cio_v9.experiments.exp0001_pipeline as pipeline
 from gold_cio_v9.backtest.costs import CostAssumptions
 from gold_cio_v9.data.governance import HistoricalBar, QualityState, RollMethod
+from gold_cio_v9.experiments.exp0001_inputs import CausalInputState, DirectionalPermission
 from gold_cio_v9.ict_engine.pit_events import ConfirmedSwing
 
 
@@ -54,6 +55,7 @@ def test_pipeline_delegates_locked_layers_once(monkeypatch):
     calls = []
     sentinel = object()
 
+    monkeypatch.setattr(pipeline, "build_exp0001_causal_inputs", lambda *a, **k: CausalInputState({0: "BULLISH"}, {0: DirectionalPermission(True, False)}))
     monkeypatch.setattr(pipeline, "build_causal_context", lambda *a, **k: (_context(),))
 
     def stream(b, c):
@@ -72,13 +74,7 @@ def test_pipeline_delegates_locked_layers_once(monkeypatch):
     monkeypatch.setattr(pipeline, "assemble_replay_setups", sequence)
     monkeypatch.setattr(pipeline, "run_exp0001_backtest", backtest)
 
-    out = pipeline.run_exp0001_pipeline(
-        bars=bars,
-        config=cfg,
-        prior_trend_by_index={0: "BULLISH"},
-        htf_permission={0: True},
-        costs=_costs(),
-    )
+    out = pipeline.run_exp0001_pipeline(bars=bars, config=cfg, costs=_costs())
 
     assert out.context_points == 1
     assert out.stream_events == 1
@@ -86,12 +82,12 @@ def test_pipeline_delegates_locked_layers_once(monkeypatch):
     assert out.backtest is sentinel
     assert [x[0] for x in calls] == ["stream", "sequence", "backtest"]
     assert calls[1][1]["horizon_bars"] == 30
-    assert calls[1][1]["htf_permission"] == {0: True}
+    assert calls[1][1]["htf_permission"] == {0: DirectionalPermission(True, False)}
 
 
 def test_incomplete_context_fails_closed(monkeypatch):
     c = _context()
-    c.atr_prior = None if hasattr(c, "__dict__") else c.atr_prior
+    monkeypatch.setattr(pipeline, "build_exp0001_causal_inputs", lambda *a, **k: CausalInputState({0: "BULLISH"}, {0: DirectionalPermission(True, False)}))
     monkeypatch.setattr(
         pipeline,
         "build_causal_context",
@@ -101,20 +97,17 @@ def test_incomplete_context_fails_closed(monkeypatch):
         pipeline.run_exp0001_pipeline(
             bars=(_bar(),),
             config=pipeline.PipelineConfig(14, 2, 2, 30),
-            prior_trend_by_index={0: "BULLISH"},
-            htf_permission={0: True},
             costs=_costs(),
         )
 
 
 def test_invalid_prior_trend_fails_closed(monkeypatch):
+    monkeypatch.setattr(pipeline, "build_exp0001_causal_inputs", lambda *a, **k: CausalInputState({0: "SIDEWAYS"}, {0: DirectionalPermission(True, False)}))
     monkeypatch.setattr(pipeline, "build_causal_context", lambda *a, **k: (_context(),))
     with pytest.raises(ValueError, match="invalid prior trend"):
         pipeline.run_exp0001_pipeline(
             bars=(_bar(),),
             config=pipeline.PipelineConfig(14, 2, 2, 30),
-            prior_trend_by_index={0: "SIDEWAYS"},
-            htf_permission={0: True},
             costs=_costs(),
         )
 
