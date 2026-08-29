@@ -7,10 +7,11 @@ trade outcomes and hashes every material input/output for evidence lineage.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from datetime import timedelta
 from hashlib import sha256
 import json
 from math import isfinite
-from typing import Iterable, Literal, Sequence
+from typing import Literal, Sequence
 
 from gold_cio_v9.backtest.costs import CostAssumptions, net_pnl_price
 from gold_cio_v9.data.governance import HistoricalBar, require_dataset_ready
@@ -29,12 +30,15 @@ class TradeCandidate:
     stop: float
     target: float
     horizon_bars: int
+    horizon_minutes: int | None = None
 
     def __post_init__(self) -> None:
         if not self.candidate_id.strip():
             raise ValueError("candidate_id is required")
         if self.signal_index < 0 or self.horizon_bars <= 0:
             raise ValueError("signal_index must be >=0 and horizon_bars >0")
+        if self.horizon_minutes is not None and self.horizon_minutes <= 0:
+            raise ValueError("horizon_minutes must be positive when supplied")
         if not all(isfinite(v) for v in (self.entry, self.stop, self.target)):
             raise ValueError("entry/stop/target must be finite")
         if self.direction == "LONG" and not (self.stop < self.entry < self.target):
@@ -79,6 +83,27 @@ def hash_candidates(candidates: Sequence[TradeCandidate]) -> str:
     return _stable_hash([asdict(c) for c in candidates])
 
 
+def _future_bars_for_candidate(
+    materialized: Sequence[HistoricalBar], candidate: TradeCandidate
+) -> Sequence[HistoricalBar]:
+    n = len(materialized)
+    if candidate.signal_index >= n - 1:
+        raise ValueError(f"candidate {candidate.candidate_id} has no future bars")
+    if candidate.horizon_minutes is None:
+        end = min(n, candidate.signal_index + 1 + candidate.horizon_bars)
+        return materialized[candidate.signal_index + 1 : end]
+
+    signal_time = materialized[candidate.signal_index].event_time
+    cutoff = signal_time + timedelta(minutes=candidate.horizon_minutes)
+    future = [
+        b for b in materialized[candidate.signal_index + 1 :]
+        if b.event_time <= cutoff
+    ]
+    if not future:
+        raise ValueError(f"candidate {candidate.candidate_id} has no future bars within clock horizon")
+    return future
+
+
 def run_backtest(
     *,
     bars: Sequence[HistoricalBar],
@@ -86,11 +111,12 @@ def run_backtest(
     instrument: str,
     costs: CostAssumptions,
 ) -> BacktestResult:
-    """Run deterministic bar-based evidence replay.
+    """Run deterministic evidence replay.
 
-    Candidates are assumed to have been generated causally upstream. The runner
-    never creates or tunes signals. Ambiguous same-bar target/stop outcomes are
-    preserved with NaN realized R and must be handled explicitly by validation.
+    Generic candidates may use a bar-count horizon. Strategies preregistered in
+    wall-clock minutes set ``horizon_minutes``; then missing/no-trade bars are not
+    silently converted into extra elapsed time. Ambiguous same-bar outcomes remain
+    explicit and are handled downstream by validation policy.
     """
     materialized = list(bars)
     require_dataset_ready(materialized, instrument=instrument)
@@ -98,12 +124,9 @@ def run_backtest(
         raise ValueError("no candidates supplied")
 
     out: list[TradeResult] = []
-    n = len(materialized)
     for c in candidates:
-        if c.signal_index >= n - 1:
-            raise ValueError(f"candidate {c.candidate_id} has no future bars")
-        end = min(n, c.signal_index + 1 + c.horizon_bars)
-        future = [(b.high, b.low, b.close) for b in materialized[c.signal_index + 1 : end]]
+        future_bars = _future_bars_for_candidate(materialized, c)
+        future = [(b.high, b.low, b.close) for b in future_bars]
         if c.direction == "LONG":
             label = label_long(c.entry, c.stop, c.target, future)
             risk_price = c.entry - c.stop
