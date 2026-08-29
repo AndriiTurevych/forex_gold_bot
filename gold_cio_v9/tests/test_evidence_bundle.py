@@ -21,13 +21,13 @@ def _bars():
     ) for i in range(3))
 
 
-def _lineage(bars):
+def _lineage(bars, *, master_hash="master-locked-hash"):
     m = build_gc_dataset_manifest(bars)
     return AcquisitionLineageManifest(
         5, 1,
         (RollDecisionLineage("2025-06-02", "2025-05-30", "GCQ5", (("GCM5", 1240.0), ("GCQ5", 179229.0))),),
         (("GCQ5", "2025-06-02", "2025-06-02"),),
-        m.dataset_hash, "lineage-locked-hash",
+        m.dataset_hash, "lineage-locked-hash", 365, master_hash,
     )
 
 
@@ -51,6 +51,8 @@ def test_bundle_round_trip_is_deterministic(tmp_path):
     assert loaded.bundle_hash == bundle.bundle_hash
     assert loaded.dataset_hash == bundle.dataset_hash
     assert loaded.bars == bars
+    assert loaded.acquisition_lineage.contract_master_hash == "master-locked-hash"
+    assert loaded.acquisition_lineage.max_settlement_days_forward == 365
     assert loaded.macro_calendar.calendar_hash == _macro().calendar_hash
     assert loaded.base_costs == _costs()
 
@@ -74,7 +76,6 @@ def test_macro_calendar_hash_tamper_is_rejected(tmp_path):
     dump_evidence_bundle(bundle, p)
     raw = json.loads(p.read_text())
     raw["payload"]["macro_calendar"]["calendar_hash"] = "wrong"
-    # Recompute only the outer hash to prove the inner macro identity is independently checked.
     from hashlib import sha256
     payload = raw["payload"]
     raw["bundle_hash"] = sha256(json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
@@ -85,9 +86,16 @@ def test_macro_calendar_hash_tamper_is_rejected(tmp_path):
 
 def test_lineage_dataset_mismatch_fails_before_bundle_creation():
     bars = _bars()
-    bad = AcquisitionLineageManifest(5, 1, _lineage(bars).decisions, _lineage(bars).fetch_windows, "wrong", "lineage")
+    good = _lineage(bars)
+    bad = AcquisitionLineageManifest(5, 1, good.decisions, good.fetch_windows, "wrong", "lineage", 365, "master")
     with pytest.raises(ValueError, match="lineage does not bind"):
         build_evidence_bundle(bars=bars, acquisition_lineage=bad, macro_calendar=_macro(), base_costs=_costs())
+
+
+def test_missing_contract_master_hash_fails_before_bundle_creation():
+    bars = _bars()
+    with pytest.raises(ValueError, match="contract_master_hash"):
+        build_evidence_bundle(bars=bars, acquisition_lineage=_lineage(bars, master_hash=""), macro_calendar=_macro(), base_costs=_costs())
 
 
 def test_macro_coverage_gap_is_rejected_before_bundle_creation():
