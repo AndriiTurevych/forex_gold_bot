@@ -24,16 +24,28 @@ def test_exp0001_preregistration_matches_locked_blob():
     assert_preregistration_immutable(lock)
 
 
-def test_exp0001_baseline_policy_matches_locked_blob():
+def test_exp0001_active_baseline_policy_v3_matches_locked_blob():
     policy = _experiment()["implementation_policy"]
+    assert policy["id"] == "EXP-0001-BASELINE-POLICY-V3"
     assert policy["status"] == "LOCKED_BEFORE_OUTCOMES"
     assert policy["post_outcome_modification_allowed"] is False
     assert git_blob_sha(policy["path"]) == policy["registered_blob_sha"]
 
 
-def test_exp0001_active_validation_policy_v4_matches_locked_blob():
+def test_superseded_baseline_policies_remain_hash_auditable():
+    history = _experiment()["implementation_policy_history"]
+    assert [p["id"] for p in history] == [
+        "EXP-0001-BASELINE-POLICY-V1",
+        "EXP-0001-BASELINE-POLICY-V2",
+    ]
+    for policy in history:
+        assert policy["status"] == "SUPERSEDED_BEFORE_OUTCOMES"
+        assert git_blob_sha(policy["path"]) == policy["registered_blob_sha"]
+
+
+def test_exp0001_active_validation_policy_v5_matches_locked_blob():
     policy = _experiment()["validation_policy"]
-    assert policy["id"] == "EXP-0001-VALIDATION-POLICY-V4"
+    assert policy["id"] == "EXP-0001-VALIDATION-POLICY-V5"
     assert policy["status"] == "LOCKED_BEFORE_OUTCOMES"
     assert policy["post_outcome_modification_allowed"] is False
     assert git_blob_sha(policy["path"]) == policy["registered_blob_sha"]
@@ -45,6 +57,7 @@ def test_superseded_validation_policies_remain_hash_auditable():
         "EXP-0001-VALIDATION-POLICY-V1",
         "EXP-0001-VALIDATION-POLICY-V2",
         "EXP-0001-VALIDATION-POLICY-V3",
+        "EXP-0001-VALIDATION-POLICY-V4",
     ]
     for policy in history:
         assert policy["status"] == "SUPERSEDED_BEFORE_OUTCOMES"
