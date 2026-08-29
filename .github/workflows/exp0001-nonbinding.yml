@@ -2,49 +2,125 @@ name: EXP-0001 Nonbinding Full Test
 
 on:
   workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type EXP-0001 to authorize a formal outcome-generating run'
+        required: true
+        type: string
+  # Keep one push path only so edits to strategy/data code cannot silently launch a
+  # new formal trial after the Massive credential is installed. This workflow file
+  # commit itself creates the prepared failed/blocked run that can be re-run once.
   push:
     branches: [gold-cio-v9]
     paths:
       - '.github/workflows/exp0001-nonbinding.yml'
-      - 'scripts/acquire_exp0001_massive.py'
-      - 'scripts/build_exp0001_bundle.py'
-      - 'scripts/preflight_exp0001.py'
-      - 'scripts/run_exp0001_formal.py'
-      - 'gold_cio_v9/experiments/EXP-0001-macro-calendar-official-v1.json'
-      - 'gold_cio_v9/data/**'
-      - 'gold_cio_v9/validation/**'
-      - 'gold_cio_v9/experiments/**'
 
 permissions:
   contents: read
 
 env:
   PYTHONUNBUFFERED: '1'
+  EXP_ID: 'EXP-0001'
+  EVIDENCE_START: '2025-04-03'
+  EVIDENCE_END: '2026-08-27'
+
+concurrency:
+  group: exp0001-formal-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   full-exp0001:
     runs-on: ubuntu-24.04
     timeout-minutes: 180
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Verify checked-out identity and explicit authorization
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git branch --show-current)" = "gold-cio-v9"
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            test "$CONFIRMATION" = "$EXP_ID" || {
+              echo "Formal run not authorized: confirmation must equal $EXP_ID";
+              exit 4;
+            }
+          fi
+          mkdir -p exp0001_artifacts
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          payload = {
+              'experiment_id': os.environ['EXP_ID'],
+              'event_name': os.environ['GITHUB_EVENT_NAME'],
+              'repository': os.environ['GITHUB_REPOSITORY'],
+              'ref': os.environ['GITHUB_REF'],
+              'sha': os.environ['GITHUB_SHA'],
+              'run_id': os.environ['GITHUB_RUN_ID'],
+              'run_attempt': os.environ['GITHUB_RUN_ATTEMPT'],
+              'evidence_start': os.environ['EVIDENCE_START'],
+              'evidence_end': os.environ['EVIDENCE_END'],
+              'strategy_outcomes_generated_at_context_write': False,
+          }
+          Path('exp0001_artifacts/run_context.json').write_text(
+              json.dumps(payload, sort_keys=True, indent=2), encoding='utf-8')
+          PY
 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          cache: 'pip'
 
       - name: Install dependencies
         run: |
+          set -euo pipefail
           python -m pip install --upgrade pip
           pip install pytest pyyaml numpy
 
-      - name: Verify Massive credential
+      - name: Verify Massive credential exists
         env:
           MASSIVE_API_KEY: ${{ secrets.MASSIVE_API_KEY }}
         run: |
+          set -euo pipefail
           test -n "$MASSIVE_API_KEY" || { echo 'MASSIVE_API_KEY secret is required'; exit 3; }
+
+      - name: Verify Massive Futures entitlement before bulk acquisition
+        env:
+          MASSIVE_API_KEY: ${{ secrets.MASSIVE_API_KEY }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from urllib.parse import urlencode
+          from urllib.request import Request, urlopen
+          q = urlencode({
+              'product_code': 'GC',
+              'session_end_date.gte': '2026-08-24',
+              'session_end_date.lte': '2026-08-24',
+              'limit': 10,
+              'apiKey': os.environ['MASSIVE_API_KEY'],
+          })
+          req = Request('https://api.massive.com/futures/v1/schedules?' + q,
+                        headers={'Accept':'application/json','User-Agent':'Gold-CIO-v9-EXP0001/1.0'})
+          with urlopen(req, timeout=30) as r:
+              payload = json.loads(r.read().decode('utf-8'))
+          if payload.get('status') not in (None, 'OK'):
+              raise SystemExit(f"Massive Futures entitlement/status check failed: {payload.get('status')!r}")
+          if not payload.get('results'):
+              raise SystemExit('Massive Futures schedule entitlement check returned no GC rows')
+          print('Massive Futures entitlement: OK')
+          PY
 
       - name: Run full unit and trust suites before evidence
         run: |
+          set -euo pipefail
           python -m pytest -q gold_cio_v9/tests
           python -m pytest -q gold_cio_v9/tester_trust
 
@@ -52,14 +128,15 @@ jobs:
         env:
           MASSIVE_API_KEY: ${{ secrets.MASSIVE_API_KEY }}
         run: |
-          mkdir -p exp0001_artifacts
+          set -euo pipefail
           python scripts/acquire_exp0001_massive.py \
-            --start 2025-04-03 \
-            --end 2026-08-27 \
+            --start "$EVIDENCE_START" \
+            --end "$EVIDENCE_END" \
             --output-dir exp0001_artifacts
 
       - name: Build immutable evidence bundle
         run: |
+          set -euo pipefail
           python scripts/build_exp0001_bundle.py \
             --bars exp0001_artifacts/bars.jsonl \
             --lineage exp0001_artifacts/lineage.json \
@@ -69,12 +146,14 @@ jobs:
 
       - name: Zero-outcome readiness preflight
         run: |
+          set -euo pipefail
           python scripts/preflight_exp0001.py \
             --bundle exp0001_artifacts/evidence_bundle.json \
             --output exp0001_artifacts/readiness.json
 
       - name: Run EXP-0001 nonbinding formal test
         run: |
+          set -euo pipefail
           python scripts/run_exp0001_formal.py \
             --bundle exp0001_artifacts/evidence_bundle.json \
             --git-commit "$GITHUB_SHA" \
@@ -85,6 +164,7 @@ jobs:
 
       - name: Print machine verdict
         run: |
+          set -euo pipefail
           python - <<'PY'
           import json
           from pathlib import Path
@@ -103,7 +183,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: exp0001-nonbinding-${{ github.sha }}
+          name: exp0001-nonbinding-${{ github.sha }}-attempt-${{ github.run_attempt }}
           path: exp0001_artifacts/
           if-no-files-found: warn
-          retention-days: 30
+          retention-days: 90
