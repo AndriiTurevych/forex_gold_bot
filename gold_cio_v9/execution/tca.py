@@ -46,14 +46,20 @@ class TCAResult:
 
 
 def _signed_move(side: str, start: float, end: float) -> float:
+    """PnL-oriented signed move from start to end."""
     return end - start if side == "BUY" else start - end
+
+
+def _adverse_entry_move(side: str, start: float, end: float) -> float:
+    """Positive when a later executable entry is worse than an earlier one."""
+    return max(0.0, end - start) if side == "BUY" else max(0.0, start - end)
 
 
 def analyze_tca(item: TCAInput) -> TCAResult:
     gross_alpha = _signed_move(item.side, item.theoretical_entry, item.exit_price)
-    decision_cost = max(0.0, -_signed_move(item.side, item.theoretical_entry, item.decision_price))
-    submit_cost = max(0.0, -_signed_move(item.side, item.decision_price, item.submit_price))
-    fill_slippage = max(0.0, -_signed_move(item.side, item.submit_price, item.fill_price))
+    decision_cost = _adverse_entry_move(item.side, item.theoretical_entry, item.decision_price)
+    submit_cost = _adverse_entry_move(item.side, item.decision_price, item.submit_price)
+    fill_slippage = _adverse_entry_move(item.side, item.submit_price, item.fill_price)
     realized = _signed_move(item.side, item.fill_price, item.exit_price) - item.fees_points
     drag = gross_alpha - realized
     return TCAResult(
