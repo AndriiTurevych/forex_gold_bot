@@ -5,7 +5,11 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Mapping, Sequence
 
-from gold_cio_v9.data.causal_roll import PriorSessionLiquidity, select_causal_liquid_front
+from gold_cio_v9.data.causal_roll import (
+    MAX_SETTLEMENT_DAYS_FORWARD,
+    PriorSessionLiquidity,
+    select_causal_liquid_front,
+)
 from gold_cio_v9.data.massive_contracts import parse_massive_gc_contracts
 
 
@@ -28,13 +32,8 @@ def build_liquid_front_calendar(
     *,
     dates: Sequence[date],
     roll_buffer_days: int = 5,
+    max_settlement_days_forward: int = MAX_SETTLEMENT_DAYS_FORWARD,
 ) -> LiquidFrontCalendar:
-    """Build a PIT daily chain using only completed prior-session liquidity.
-
-    The caller supplies both the PIT metadata snapshot and the prior-session volume
-    snapshot for every requested date. Missing evidence fails closed. Contract
-    re-entry is prohibited so the resulting chain is monotonic and auditable.
-    """
     if not dates:
         raise ValueError("dates are required")
     if len(set(dates)) != len(dates):
@@ -45,7 +44,6 @@ def build_liquid_front_calendar(
     out: list[LiquidFrontDay] = []
     order: list[str] = []
     seen: set[str] = set()
-
     for as_of in dates:
         rows = snapshots.get(as_of)
         if rows is None:
@@ -59,6 +57,7 @@ def build_liquid_front_calendar(
             as_of=as_of,
             prior_liquidity=liquidity,
             roll_buffer_days=roll_buffer_days,
+            max_settlement_days_forward=max_settlement_days_forward,
         )
         out.append(LiquidFrontDay(as_of, liquidity.session_date, contract))
         if contract not in seen:
@@ -72,5 +71,4 @@ def build_liquid_front_calendar(
         if current_rank < last_rank:
             raise ValueError("liquidity-aware calendar re-enters an older contract")
         last_rank = current_rank
-
     return LiquidFrontCalendar(tuple(out), tuple(order))
