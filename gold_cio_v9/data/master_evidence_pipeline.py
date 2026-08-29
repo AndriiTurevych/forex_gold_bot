@@ -1,4 +1,4 @@
-"""One-call data-only acquisition assembly for EXP-0001 Baseline Policy V3.
+"""One-call data-only acquisition assembly for EXP-0001 Baseline Policy V4.
 
 The caller supplies an immutable GC contract master, requested evidence dates,
 explicit prior completed-session dates, completed per-contract volume responses and
@@ -17,7 +17,7 @@ from gold_cio_v9.data.evidence_lineage import AcquisitionLineageManifest, build_
 from gold_cio_v9.data.master_front_calendar import MasterLiquidityRequest, build_master_liquid_front_calendar, build_master_liquidity_request_plan
 
 ROLL_BUFFER_DAYS = 5
-ROLL_BUFFER_BARS = 1
+ROLL_BUFFER_BARS = 0
 MAX_SETTLEMENT_DAYS_FORWARD = 365
 
 
@@ -36,27 +36,21 @@ def build_master_evidence_dataset(
     liquidity_responses_by_as_of: Mapping[date, Mapping[str, Sequence[Mapping[str, object]]]],
     pages_by_contract: Mapping[str, Sequence[Mapping[str, Any]]],
 ) -> MasterEvidenceResult:
-    """Build a fully identity-bound raw-contract dataset under locked V3 policy."""
+    """Build a fully identity-bound raw-contract dataset under locked V4 policy."""
     if not master.master_hash.strip():
         raise ValueError("immutable contract master hash is required")
     requests = build_master_liquidity_request_plan(
-        master,
-        dates=dates,
-        prior_session_date_by_as_of=prior_session_date_by_as_of,
+        master, dates=dates, prior_session_date_by_as_of=prior_session_date_by_as_of,
         roll_buffer_days=ROLL_BUFFER_DAYS,
         max_settlement_days_forward=MAX_SETTLEMENT_DAYS_FORWARD,
     )
     calendar = build_master_liquid_front_calendar(
-        master,
-        requests=requests,
-        responses_by_as_of=liquidity_responses_by_as_of,
+        master, requests=requests, responses_by_as_of=liquidity_responses_by_as_of,
         roll_buffer_days=ROLL_BUFFER_DAYS,
         max_settlement_days_forward=MAX_SETTLEMENT_DAYS_FORWARD,
     )
     dataset = assemble_evidence_dataset(
-        calendar,
-        pages_by_contract=pages_by_contract,
-        roll_buffer_bars=ROLL_BUFFER_BARS,
+        calendar, pages_by_contract=pages_by_contract, roll_buffer_bars=ROLL_BUFFER_BARS,
     )
     lineage = build_acquisition_lineage_manifest(
         requests=requests,
