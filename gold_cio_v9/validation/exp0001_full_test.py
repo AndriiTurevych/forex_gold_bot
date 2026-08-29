@@ -18,7 +18,7 @@ from gold_cio_v9.validation.exp0001_regimes import MacroEvent, build_regime_labe
 from gold_cio_v9.validation.ledger import EvidenceLedger, EvidenceRecord
 from gold_cio_v9.validation.trials import TrialRecord, TrialsRegistry
 
-IMPLEMENTATION_POLICY = "EXP-0001-BASELINE-POLICY-V1"
+IMPLEMENTATION_POLICY = "EXP-0001-BASELINE-POLICY-V2"
 VALIDATION_POLICY = "EXP-0001-VALIDATION-POLICY-V4"
 STRESS_MULTIPLE = 1.5
 
@@ -41,11 +41,7 @@ def _stable_hash(payload: object) -> str:
 
 def _macro_hash(events: Sequence[MacroEvent]) -> str:
     rows = [
-        {
-            "event_time": e.event_time.isoformat(),
-            "known_at": e.known_at.isoformat(),
-            "category": e.category,
-        }
+        {"event_time": e.event_time.isoformat(), "known_at": e.known_at.isoformat(), "category": e.category}
         for e in sorted(events, key=lambda x: (x.event_time, x.category, x.known_at))
     ]
     return _stable_hash(rows)
@@ -56,10 +52,8 @@ def _candidate_hash(book: EvidenceBook) -> str:
     for cell in book.cells:
         for t in cell.trades:
             rows.append({
-                "contract": t.contract,
-                "horizon_minutes": t.horizon_minutes,
-                "candidate_id": t.candidate_id,
-                "signal_time": t.signal_time.isoformat(),
+                "contract": t.contract, "horizon_minutes": t.horizon_minutes,
+                "candidate_id": t.candidate_id, "signal_time": t.signal_time.isoformat(),
                 "direction": t.direction,
             })
     rows.sort(key=lambda r: (r["horizon_minutes"], r["signal_time"], r["contract"], r["candidate_id"]))
@@ -70,21 +64,16 @@ def _book_result_payload(book: EvidenceBook) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
     for cell in book.cells:
         rows.append({
-            "contract": cell.contract,
-            "horizon_minutes": cell.horizon_minutes,
-            "status": cell.status,
-            "context_points": cell.context_points,
-            "stream_events": cell.stream_events,
-            "replay_setups": cell.replay_setups,
+            "contract": cell.contract, "horizon_minutes": cell.horizon_minutes,
+            "status": cell.status, "context_points": cell.context_points,
+            "stream_events": cell.stream_events, "replay_setups": cell.replay_setups,
             "data_snapshot_hash": cell.data_snapshot_hash,
             "candidate_snapshot_hash": cell.candidate_snapshot_hash,
             "result_hash": cell.result_hash,
             "trades": [
                 {
-                    "candidate_id": t.candidate_id,
-                    "signal_time": t.signal_time.isoformat(),
-                    "direction": t.direction,
-                    "first_touch": t.first_touch,
+                    "candidate_id": t.candidate_id, "signal_time": t.signal_time.isoformat(),
+                    "direction": t.direction, "first_touch": t.first_touch,
                     "bars_to_first_touch": t.bars_to_first_touch,
                     "net_pnl_price": t.net_pnl_price if t.resolved else None,
                     "resolved": t.resolved,
@@ -106,11 +95,6 @@ def run_formal_exp0001_test(
     evidence_ledger: EvidenceLedger,
     git_commit: str,
 ) -> FormalExpOutcome:
-    """Run the full locked test and persist its verdict before returning outcomes.
-
-    This function deliberately has no parameter overrides for strategy thresholds,
-    horizons, partitions, regime thresholds or acceptance gates.
-    """
     if not git_commit.strip():
         raise ValueError("git_commit is required")
     if base_costs.stress_multiple != 1.0:
@@ -137,34 +121,23 @@ def run_formal_exp0001_test(
         "stress_multiple": STRESS_MULTIPLE,
     }
 
-    # Register before outcome generation. Trial count is global and therefore
-    # conservative for the DSR multiple-testing correction.
     trial = trial_registry.register(
-        experiment_id="EXP-0001",
-        config=config,
-        data_snapshot_hash=data_snapshot_hash,
-        git_commit=git_commit,
+        experiment_id="EXP-0001", config=config,
+        data_snapshot_hash=data_snapshot_hash, git_commit=git_commit,
     )
     trial_count = len(trial_registry.read_all())
 
     base_book = build_exp0001_evidence_book(bars=materialized, costs=base_costs)
     stress_book = build_exp0001_evidence_book(
-        bars=materialized,
-        costs=stressed_costs(base_costs, STRESS_MULTIPLE),
+        bars=materialized, costs=stressed_costs(base_costs, STRESS_MULTIPLE),
     )
     regimes = build_regime_labels(
-        bars=materialized,
-        book=base_book,
-        macro_events=tuple(macro_events),
-        horizon_minutes=60,
+        bars=materialized, book=base_book, macro_events=tuple(macro_events), horizon_minutes=60,
     )
     validation = build_validation_metrics(
-        base_book=base_book,
-        stress_1_5x_book=stress_book,
-        trial_count=trial_count,
-        regime_labels=regimes,
-        data_integrity_ok=True,
-        post_result_parameter_edits=False,
+        base_book=base_book, stress_1_5x_book=stress_book,
+        trial_count=trial_count, regime_labels=regimes,
+        data_integrity_ok=True, post_result_parameter_edits=False,
     )
     decision = evaluate_exp0001(validation.metrics)
     verdict = classify_verdict(accepted=decision.accepted, failed_gates=decision.failed_gates)
@@ -177,27 +150,13 @@ def run_formal_exp0001_test(
         "verdict": verdict,
         "failed_gates": decision.failed_gates,
     })
-
-    # Ledger first: no formal outcome object is returned before persistence.
     record = evidence_ledger.append(
-        experiment_id="EXP-0001",
-        trial_id=trial.trial_id,
-        git_commit=git_commit,
-        data_snapshot_hash=data_snapshot_hash,
-        candidate_snapshot_hash=candidate_snapshot_hash,
-        result_hash=result_hash,
-        config_hash=trial.config_hash,
-        verdict=verdict,
-        metrics=asdict(validation.metrics),
-        failed_gates=decision.failed_gates,
+        experiment_id="EXP-0001", trial_id=trial.trial_id, git_commit=git_commit,
+        data_snapshot_hash=data_snapshot_hash, candidate_snapshot_hash=candidate_snapshot_hash,
+        result_hash=result_hash, config_hash=trial.config_hash,
+        verdict=verdict, metrics=asdict(validation.metrics), failed_gates=decision.failed_gates,
     )
     return FormalExpOutcome(
-        verdict,
-        decision.failed_gates,
-        trial,
-        validation,
-        record,
-        data_snapshot_hash,
-        candidate_snapshot_hash,
-        result_hash,
+        verdict, decision.failed_gates, trial, validation, record,
+        data_snapshot_hash, candidate_snapshot_hash, result_hash,
     )
