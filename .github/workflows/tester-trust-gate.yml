@@ -13,6 +13,8 @@ on:
       - 'gold_cio_v9/experiments/**'
       - 'gold_cio_v9/config/tester_trust_gate.yaml'
       - 'gold_cio_v9/tests/**'
+      - 'scripts/**'
+      - '.github/workflows/exp0001-nonbinding.yml'
       - '.github/workflows/tester-trust-gate.yml'
   push:
     branches:
@@ -28,6 +30,8 @@ on:
       - 'gold_cio_v9/experiments/**'
       - 'gold_cio_v9/config/tester_trust_gate.yaml'
       - 'gold_cio_v9/tests/**'
+      - 'scripts/**'
+      - '.github/workflows/exp0001-nonbinding.yml'
       - '.github/workflows/tester-trust-gate.yml'
   workflow_dispatch:
 
@@ -49,8 +53,12 @@ jobs:
 
       - name: Install test dependencies
         run: |
+          set -euo pipefail
           python -m pip install --upgrade pip
           python -m pip install pytest pyyaml numpy
+
+      - name: Test 0 - Formal workflow contract
+        run: python -m pytest -q gold_cio_v9/tests/test_exp0001_workflow_contract.py
 
       - name: Test 4 - Known-answer synthetic verdicts
         run: python -m pytest -q gold_cio_v9/tests/trust/test_known_answer.py
