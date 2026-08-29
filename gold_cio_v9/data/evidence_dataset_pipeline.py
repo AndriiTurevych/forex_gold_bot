@@ -11,7 +11,7 @@ from gold_cio_v9.data.dataset_manifest import DatasetManifest, build_gc_dataset_
 from gold_cio_v9.data.governance import HistoricalBar
 from gold_cio_v9.data.liquid_front_calendar import LiquidFrontCalendar, build_liquid_front_calendar
 from gold_cio_v9.data.massive_contracts import parse_massive_gc_contracts
-from gold_cio_v9.data.massive_fetch_plan import ContractFetchWindow, parse_complete_massive_gc_pages
+from gold_cio_v9.data.massive_fetch_plan import ContractFetchWindow, parse_complete_massive_gc_session_pages
 from gold_cio_v9.data.prior_session_liquidity import build_prior_session_liquidity
 
 
@@ -38,7 +38,6 @@ def build_liquidity_request_plan(
     roll_buffer_days: int = 5,
     max_settlement_days_forward: int = MAX_SETTLEMENT_DAYS_FORWARD,
 ) -> tuple[LiquidityRequest, ...]:
-    """Freeze exact prior-session requests for the locked bounded front universe."""
     if not dates:
         raise ValueError("dates are required")
     if len(set(dates)) != len(dates):
@@ -58,9 +57,7 @@ def build_liquidity_request_plan(
             raise ValueError("prior session date must be strictly before as_of")
         specs = parse_massive_gc_contracts(rows, as_of=as_of)
         candidates = causal_front_candidates(
-            specs,
-            as_of=as_of,
-            roll_buffer_days=roll_buffer_days,
+            specs, as_of=as_of, roll_buffer_days=roll_buffer_days,
             max_settlement_days_forward=max_settlement_days_forward,
         )
         requests.append(LiquidityRequest(as_of, session_date, tuple(spec.ticker for spec in candidates)))
@@ -91,24 +88,20 @@ def build_calendar_from_liquidity_responses(
         if responses is None:
             raise ValueError(f"missing liquidity responses for {request.as_of.isoformat()}")
         prior[request.as_of] = build_prior_session_liquidity(
-            responses,
-            expected_contracts=request.contracts,
-            session_date=request.session_date,
+            responses, expected_contracts=request.contracts, session_date=request.session_date,
         )
 
     unexpected = set(responses_by_as_of) - set(dates)
     if unexpected:
         raise ValueError("liquidity responses contain dates outside request plan")
     return build_liquid_front_calendar(
-        snapshots,
-        prior,
-        dates=dates,
-        roll_buffer_days=roll_buffer_days,
+        snapshots, prior, dates=dates, roll_buffer_days=roll_buffer_days,
         max_settlement_days_forward=max_settlement_days_forward,
     )
 
 
 def build_liquid_contract_fetch_plan(calendar: LiquidFrontCalendar) -> tuple[ContractFetchWindow, ...]:
+    """Compress front assignments into windows of session_end_date, not UTC bar dates."""
     if not calendar.days or not calendar.contract_order:
         raise ValueError("liquid front calendar is empty")
     windows: list[ContractFetchWindow] = []
@@ -137,8 +130,15 @@ def assemble_evidence_dataset(
     calendar: LiquidFrontCalendar,
     *,
     pages_by_contract: Mapping[str, Sequence[Mapping[str, Any]]],
-    roll_buffer_bars: int = 1,
+    roll_buffer_bars: int = 0,
 ) -> EvidenceDatasetResult:
+    """Assemble only the exact trading sessions assigned to each causal front.
+
+    Fetch pages may include the one-day ``window_start`` padding required by Massive
+    to capture the prior-evening opening of the first requested futures session.
+    The session-aware parser removes padding by ``session_end_date`` before bars are
+    normalized and stitched.
+    """
     windows = build_liquid_contract_fetch_plan(calendar)
     planned = tuple(w.contract for w in windows)
     if set(pages_by_contract) != set(planned):
@@ -147,15 +147,14 @@ def assemble_evidence_dataset(
         raise ValueError(f"aggregate page coverage mismatch missing={missing} extra={extra}")
     contract_bars: dict[str, tuple[HistoricalBar, ...]] = {}
     for window in windows:
-        contract_bars[window.contract] = parse_complete_massive_gc_pages(
+        contract_bars[window.contract] = parse_complete_massive_gc_session_pages(
             pages_by_contract[window.contract],
             expected_contract=window.contract,
-            start_date=window.start_date,
-            end_date=window.end_date,
+            start_session_date=window.start_date,
+            end_session_date=window.end_date,
         )
     bars = assemble_gc_dataset(
-        contract_bars,
-        contract_order=calendar.contract_order,
+        contract_bars, contract_order=calendar.contract_order,
         roll_buffer_bars=roll_buffer_bars,
     )
     manifest = build_gc_dataset_manifest(bars)
