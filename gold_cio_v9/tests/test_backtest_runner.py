@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from gold_cio_v9.backtest.costs import CostAssumptions
 from gold_cio_v9.backtest.runner import TradeCandidate, run_backtest
 from gold_cio_v9.data.governance import HistoricalBar, QualityState, RollMethod
@@ -32,6 +34,23 @@ def test_runner_is_deterministic_and_hashes_lineage():
     assert r1.candidate_snapshot_hash == r2.candidate_snapshot_hash
     assert r1.result_hash == r2.result_hash
     assert r1.trades == r2.trades
+
+
+def test_clock_horizon_does_not_extend_across_missing_minutes():
+    t0 = datetime(2026, 1, 5, 14, 0, tzinfo=UTC)
+    bars = [
+        HistoricalBar("GC", "GCG26", t0, 100, 101, 99, 100, 10, QualityState.VERIFIED, "fixture", RollMethod.RAW_CONTRACT, False),
+        HistoricalBar("GC", "GCG26", t0 + timedelta(minutes=1), 100, 101, 99, 100, 10, QualityState.VERIFIED, "fixture", RollMethod.RAW_CONTRACT, False),
+        # no bars at +2..+9; a target touch at +10 must not enter a 5-minute label
+        HistoricalBar("GC", "GCG26", t0 + timedelta(minutes=10), 100, 110, 99, 109, 10, QualityState.VERIFIED, "fixture", RollMethod.RAW_CONTRACT, False),
+    ]
+    c = [TradeCandidate("clock", 0, "LONG", 100, 95, 105, 5, horizon_minutes=5)]
+    with pytest.raises(ValueError, match="no future bars within clock horizon"):
+        # only +1 is inside horizon, so actually there is one future bar; this should run
+        run_backtest(bars=bars[:1] + bars[2:], candidates=c, instrument="GC", costs=CostAssumptions(0,0,0))
+
+    r = run_backtest(bars=bars, candidates=c, instrument="GC", costs=CostAssumptions(0,0,0))
+    assert r.trades[0].first_touch != "TARGET"
 
 
 def test_metrics_and_concentration_helpers():
