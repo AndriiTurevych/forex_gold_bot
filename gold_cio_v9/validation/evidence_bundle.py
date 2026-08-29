@@ -12,10 +12,11 @@ from gold_cio_v9.backtest.costs import CostAssumptions
 from gold_cio_v9.data.dataset_manifest import build_gc_dataset_manifest
 from gold_cio_v9.data.evidence_lineage import AcquisitionLineageManifest, RollDecisionLineage
 from gold_cio_v9.data.governance import HistoricalBar, QualityState, RollMethod
+from gold_cio_v9.experiments.exp0001_locked import assert_locked_costs
 from gold_cio_v9.validation.exp0001_regimes import MacroEvent
 from gold_cio_v9.validation.macro_calendar import MacroCalendarSnapshot, build_macro_calendar_snapshot, validate_macro_calendar_for_bars
 
-BUNDLE_SCHEMA = "gold-cio-exp0001-evidence-bundle-v3"
+BUNDLE_SCHEMA = "gold-cio-exp0001-evidence-bundle-v4"
 
 
 @dataclass(frozen=True)
@@ -81,8 +82,7 @@ def canonical_bundle_payload(
     if not acquisition_lineage.contract_master_hash.strip():
         raise ValueError("contract_master_hash is required for formal evidence bundles")
     validate_macro_calendar_for_bars(macro_calendar, materialized)
-    if base_costs.stress_multiple != 1.0:
-        raise ValueError("bundle base costs must use stress_multiple=1.0")
+    assert_locked_costs(base_costs)
     return {
         "schema": BUNDLE_SCHEMA,
         "dataset_hash": manifest.dataset_hash,
@@ -193,6 +193,7 @@ def load_evidence_bundle(path: str | Path) -> EvidenceBundle:
 
     costs_raw = _require_map(payload.get("base_costs"), "base_costs")
     costs = CostAssumptions(**{k: float(v) for k, v in costs_raw.items()})
+    assert_locked_costs(costs)
     manifest = build_gc_dataset_manifest(bars)
     if manifest.dataset_hash != payload.get("dataset_hash"):
         raise ValueError("bundle dataset hash does not match bars")
