@@ -1,0 +1,67 @@
+id: EXP-0001-VALIDATION-POLICY-V4
+experiment_id: EXP-0001
+supersedes: EXP-0001-VALIDATION-POLICY-V3
+status: LOCKED_BEFORE_OUTCOMES
+reason_for_version: >
+  V3 fixed outcome-independent partitions but left preregistered regime labels
+  underspecified. V4 freezes regime definitions before real strategy outcomes.
+chronological_partition:
+  development_fraction: 0.60
+  oos_fraction: 0.20
+  untouched_holdout_fraction: 0.20
+  unit: candidate_signal_timestamp_including_ambiguous
+  preserve_contract_order: true
+  horizon_crossing_partition_boundary_allowed: false
+horizons:
+  primary_promotion_horizon_minutes: 60
+  diagnostic_horizons_minutes: [5, 15, 30]
+  all_horizons_must_be_reported: true
+  diagnostic_horizons_cannot_replace_primary: true
+cross_validation:
+  purged_kfold: 5
+  embargo_minutes: 60
+walk_forward:
+  minimum_train_fraction_of_pre_holdout: 0.50
+  test_fraction_of_pre_holdout: 0.10
+  step_fraction_of_pre_holdout: 0.10
+  stability_rule: all_completed_primary_horizon_test_windows_positive_expectancy
+sample:
+  minimum_resolved_oos_setups_primary_horizon: 200
+  ambiguous_same_bar_excluded_from_resolved_count: true
+  maximum_ambiguity_rate: 0.05
+statistics:
+  dsr_alpha: 0.05
+  pbo_maximum: 0.20
+  dsr_trials_source: append_only_global_trial_registry
+  pbo_configuration_family: preregistered_horizons_5_15_30_60
+  pbo_selection_rule: in_sample_best_horizon_ranked_by_expectancy
+  pbo_use_for_promotion: true
+concentration:
+  top_fraction: 0.05
+  top_fraction_positive_pnl_share_maximum: 0.50
+  expectancy_after_top_fraction_removal_must_be_positive: true
+costs:
+  mandatory_stress_multiple: 1.5
+regimes:
+  session_clock: UTC
+  london: '07:00-10:00'
+  ny_am: '13:30-16:00'
+  other_session_label: OTHER_SESSION
+  macro_window_minutes_before: 30
+  macro_window_minutes_after: 30
+  macro_event_source: caller_supplied_point_in_time_high_impact_US_calendar
+  macro_event_categories: [FOMC, FED_CHAIR, CPI, CORE_PCE, NFP, RETAIL_SALES]
+  volatility_definition: >
+    Prior completed UTC-day true range divided by the median of the preceding
+    20 completed UTC-day true ranges for the same raw contract.
+  volatility_high_min_ratio: 1.25
+  volatility_low_max_ratio: 0.80
+  volatility_labels: [VOL_LOW, VOL_NORMAL, VOL_HIGH]
+  catastrophic_regime_min_resolved_oos: 30
+  catastrophic_regime_rule: non_positive_expectancy
+  low_n_negative_regime: INSUFFICIENT_DATA
+verdict:
+  promotion_metrics_use_horizon_minutes: 60
+  values: [ACCEPT, REJECT, INSUFFICIENT_DATA]
+  ledger_first: true
+  no_manual_override: true
