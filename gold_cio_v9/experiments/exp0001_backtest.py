@@ -6,6 +6,7 @@ no parameter search and no setup repair.
 """
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Sequence
 
 from gold_cio_v9.backtest.costs import CostAssumptions
@@ -32,20 +33,23 @@ def _validate_setup_alignment(bars: Sequence[HistoricalBar], setups: Sequence[Re
             raise ValueError(f"setup {setup.setup_id} retest_bar does not match authoritative historical bar")
 
 
+def _candidate_future(
+    bars: Sequence[HistoricalBar], candidate: TradeCandidate
+) -> Sequence[HistoricalBar]:
+    if candidate.horizon_minutes is not None:
+        cutoff = bars[candidate.signal_index].event_time + timedelta(minutes=candidate.horizon_minutes)
+        return [b for b in bars[candidate.signal_index + 1 :] if b.event_time <= cutoff]
+    end = min(len(bars), candidate.signal_index + 1 + candidate.horizon_bars)
+    return bars[candidate.signal_index + 1 : end]
+
+
 def _validate_candidate_contract_horizons(
     bars: Sequence[HistoricalBar], candidates: Sequence[TradeCandidate]
 ) -> None:
-    """Prevent a trade outcome from crossing a futures contract boundary.
-
-    Raw-contract prices are authoritative. A candidate cannot be labelled using
-    future bars from a different GC contract because the price jump at rollover is
-    not an executable market move in the original contract.
-    """
-    n = len(bars)
+    """Prevent outcome labels from crossing a raw futures contract boundary."""
     for candidate in candidates:
         start_contract = bars[candidate.signal_index].contract
-        end = min(n, candidate.signal_index + 1 + candidate.horizon_bars)
-        future = bars[candidate.signal_index + 1 : end]
+        future = _candidate_future(bars, candidate)
         if any(b.contract != start_contract for b in future):
             raise ValueError(f"candidate {candidate.candidate_id} horizon crosses contract boundary")
 
