@@ -1,0 +1,43 @@
+id: REAL-GC-ACQUISITION-INVENTORY-2025-2026
+status: WORKSPACE_ONLY_NOT_FORMAL_EVIDENCE
+provider: Massive
+instrument: GC
+resolution: 1min
+price_method: RAW_CONTRACT
+adjusted_continuous_prices: false
+strategy_outcomes_inspected: false
+coverage_observed:
+  start: 2025-04-03
+  end: 2026-08-27
+  total_bars: 485199
+  summed_contract_sessions: 354
+quality_observed:
+  duplicate_timestamps_within_contract: 0
+  bad_ohlc_rows: 0
+  negative_volume_rows: 0
+  zero_volume_rows: 0
+contracts:
+  - {ticker: GCM5, bars: 52275, sessions: 38, start: 2025-04-03, end: 2025-05-28}
+  - {ticker: GCQ5, bars: 58922, sessions: 43, start: 2025-05-29, end: 2025-07-29}
+  - {ticker: GCZ5, bars: 115670, sessions: 84, start: 2025-07-30, end: 2025-11-25}
+  - {ticker: GCG6, bars: 57976, sessions: 42, start: 2025-11-26, end: 2026-01-28}
+  - {ticker: GCJ6, bars: 56282, sessions: 41, start: 2026-01-29, end: 2026-03-27}
+  - {ticker: GCK6, bars: 1, sessions: 1, start: 2026-03-30, end: 2026-03-30}
+  - {ticker: GCM6, bars: 54983, sessions: 40, start: 2026-03-31, end: 2026-05-27}
+  - {ticker: GCQ6, bars: 60134, sessions: 43, start: 2026-05-28, end: 2026-07-29}
+  - {ticker: GCZ6, bars: 28956, sessions: 22, start: 2026-07-30, end: 2026-08-27}
+causal_front_transitions_observed:
+  - {date: 2025-04-03, prior_session: 2025-04-02, contract: GCM5, prior_volume: 202785}
+  - {date: 2025-05-29, prior_session: 2025-05-28, contract: GCQ5, prior_volume: 124048}
+  - {date: 2025-07-30, prior_session: 2025-07-29, contract: GCZ5, prior_volume: 100888}
+  - {date: 2025-11-26, prior_session: 2025-11-25, contract: GCG6, prior_volume: 151859}
+  - {date: 2026-01-29, prior_session: 2026-01-28, contract: GCJ6, prior_volume: 335433}
+  - {date: 2026-03-30, prior_session: 2026-03-27, contract: GCK6, prior_volume: 2112}
+  - {date: 2026-03-31, prior_session: 2026-03-30, contract: GCM6, prior_volume: 145613}
+  - {date: 2026-05-28, prior_session: 2026-05-27, contract: GCQ6, prior_volume: 147467}
+  - {date: 2026-07-30, prior_session: 2026-07-29, contract: GCZ6, prior_volume: 114976}
+governance_note: >
+  This file is an acquisition inventory only. It is not accepted as strategy evidence.
+  The formal run requires materialized bars JSONL, immutable contract master, replay-
+  verifiable acquisition lineage, PIT macro calendar and a V5 evidence bundle that
+  passes scripts/preflight_exp0001.py before any outcome generation.
