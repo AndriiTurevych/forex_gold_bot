@@ -5,16 +5,25 @@ on:
     branches: [gold-cio-v9]
     paths:
       - 'gold_cio_v9/**'
+      - 'scripts/**'
       - '.github/workflows/gold-cio-v9-ci.yml'
+      - '.github/workflows/tester-trust-gate.yml'
+      - '.github/workflows/exp0001-nonbinding.yml'
   pull_request:
     paths:
       - 'gold_cio_v9/**'
+      - 'scripts/**'
       - '.github/workflows/gold-cio-v9-ci.yml'
+      - '.github/workflows/tester-trust-gate.yml'
+      - '.github/workflows/exp0001-nonbinding.yml'
 
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONHASHSEED: '1729'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -22,7 +31,18 @@ jobs:
           python-version: '3.12'
       - name: Install test dependencies
         run: |
+          set -euo pipefail
           python -m pip install --upgrade pip
           pip install pytest pyyaml numpy
+      - name: Compile critical entrypoints
+        run: |
+          set -euo pipefail
+          python -m py_compile \
+            scripts/acquire_exp0001_massive.py \
+            scripts/build_exp0001_bundle.py \
+            scripts/preflight_exp0001.py \
+            scripts/run_exp0001_formal.py
       - name: Run Gold CIO v9 tests
-        run: python -m pytest -q gold_cio_v9/tests
+        run: |
+          set -euo pipefail
+          python -m pytest -q gold_cio_v9/tests
