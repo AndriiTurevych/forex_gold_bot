@@ -1,4 +1,4 @@
-"""One-call data-only acquisition assembly for EXP-0001 Baseline Policy V4.
+"""One-call data-only acquisition assembly for EXP-0001 Baseline Policy V5.
 
 The caller supplies an immutable GC contract master, requested evidence dates,
 explicit prior completed-session dates, completed per-contract volume responses and
@@ -15,10 +15,7 @@ from gold_cio_v9.data.contract_master import ContractMaster
 from gold_cio_v9.data.evidence_dataset_pipeline import EvidenceDatasetResult, assemble_evidence_dataset
 from gold_cio_v9.data.evidence_lineage import AcquisitionLineageManifest, build_acquisition_lineage_manifest
 from gold_cio_v9.data.master_front_calendar import MasterLiquidityRequest, build_master_liquid_front_calendar, build_master_liquidity_request_plan
-
-ROLL_BUFFER_DAYS = 5
-ROLL_BUFFER_BARS = 0
-MAX_SETTLEMENT_DAYS_FORWARD = 365
+from gold_cio_v9.experiments.exp0001_locked import MAX_SETTLEMENT_DAYS_FORWARD, ROLL_BUFFER_BARS, ROLL_BUFFER_DAYS
 
 
 @dataclass(frozen=True)
@@ -36,7 +33,7 @@ def build_master_evidence_dataset(
     liquidity_responses_by_as_of: Mapping[date, Mapping[str, Sequence[Mapping[str, object]]]],
     pages_by_contract: Mapping[str, Sequence[Mapping[str, Any]]],
 ) -> MasterEvidenceResult:
-    """Build a fully identity-bound raw-contract dataset under locked V4 policy."""
+    """Build a fully identity-bound raw-contract dataset under locked V5 policy."""
     if not master.master_hash.strip():
         raise ValueError("immutable contract master hash is required")
     requests = build_master_liquidity_request_plan(
