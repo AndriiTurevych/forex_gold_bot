@@ -125,7 +125,7 @@ def main() -> int:
         "roll_buffer_bars": result.lineage.roll_buffer_bars,
         "max_settlement_days_forward": result.lineage.max_settlement_days_forward,
         "fetch_windows": [list(x) for x in result.lineage.fetch_windows],
-        "strategy_outcomes_generated": false if False else False,
+        "strategy_outcomes_generated": False,
     }
     summary_path.write_text(json.dumps(summary, sort_keys=True, indent=2), encoding="utf-8")
     print(json.dumps(summary, sort_keys=True))
