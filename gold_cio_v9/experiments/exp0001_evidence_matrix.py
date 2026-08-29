@@ -14,7 +14,7 @@ from gold_cio_v9.data.governance import HistoricalBar
 from gold_cio_v9.experiments.exp0001_pipeline import PipelineConfig, run_exp0001_pipeline
 
 
-POLICY_ID = "EXP-0001-BASELINE-POLICY-V2"
+POLICY_ID = "EXP-0001-BASELINE-POLICY-V3"
 HORIZONS_MINUTES = (5, 15, 30, 60)
 ATR_PERIOD = 14
 SWING_LEFT_BARS = 2
