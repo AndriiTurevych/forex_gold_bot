@@ -29,7 +29,7 @@ def main() -> int:
         bars=bundle.bars,
         dataset_manifest=manifest,
         acquisition_lineage=bundle.acquisition_lineage,
-        macro_events=bundle.macro_events,
+        macro_calendar=bundle.macro_calendar,
         base_costs=bundle.base_costs,
         trial_registry=TrialsRegistry(args.trials),
         evidence_ledger=EvidenceLedger(args.ledger),
@@ -38,6 +38,8 @@ def main() -> int:
     result = {
         "bundle_hash": bundle.bundle_hash,
         "dataset_hash": bundle.dataset_hash,
+        "macro_calendar_hash": bundle.macro_calendar.calendar_hash,
+        "macro_source_id": bundle.macro_calendar.source_id,
         "verdict": outcome.verdict,
         "failed_gates": list(outcome.failed_gates),
         "trial_id": outcome.trial.trial_id,
