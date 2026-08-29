@@ -11,14 +11,16 @@ from typing import Sequence
 
 from gold_cio_v9.backtest.costs import CostAssumptions
 from gold_cio_v9.data.governance import HistoricalBar
+from gold_cio_v9.experiments.exp0001_locked import (
+    ATR_PERIOD,
+    HORIZONS_MINUTES,
+    IMPLEMENTATION_POLICY_ID,
+    SWING_LEFT_BARS,
+    SWING_RIGHT_BARS,
+)
 from gold_cio_v9.experiments.exp0001_pipeline import PipelineConfig, run_exp0001_pipeline
 
-
-POLICY_ID = "EXP-0001-BASELINE-POLICY-V4"
-HORIZONS_MINUTES = (5, 15, 30, 60)
-ATR_PERIOD = 14
-SWING_LEFT_BARS = 2
-SWING_RIGHT_BARS = 2
+POLICY_ID = IMPLEMENTATION_POLICY_ID
 
 _EXPECTED_NO_EVIDENCE = {
     "no complete point-in-time context available": "NO_CONTEXT",
