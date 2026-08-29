@@ -31,6 +31,7 @@ class AcquisitionLineageManifest:
     dataset_hash: str
     lineage_hash: str
     max_settlement_days_forward: int = MAX_SETTLEMENT_DAYS_FORWARD
+    contract_master_hash: str = ""
 
 
 def build_acquisition_lineage_manifest(
@@ -43,11 +44,14 @@ def build_acquisition_lineage_manifest(
     roll_buffer_days: int,
     roll_buffer_bars: int,
     max_settlement_days_forward: int = MAX_SETTLEMENT_DAYS_FORWARD,
+    contract_master_hash: str = "",
 ) -> AcquisitionLineageManifest:
     if roll_buffer_days < 0 or roll_buffer_bars < 0:
         raise ValueError("roll buffers cannot be negative")
     if max_settlement_days_forward <= 0:
         raise ValueError("max_settlement_days_forward must be positive")
+    if contract_master_hash is not None and not isinstance(contract_master_hash, str):
+        raise ValueError("contract_master_hash must be text")
     if not requests or not calendar.days or not fetch_windows:
         raise ValueError("complete acquisition lineage inputs are required")
     if len(requests) != len(calendar.days):
@@ -87,6 +91,7 @@ def build_acquisition_lineage_manifest(
         "roll_buffer_days": roll_buffer_days,
         "roll_buffer_bars": roll_buffer_bars,
         "max_settlement_days_forward": max_settlement_days_forward,
+        "contract_master_hash": contract_master_hash,
         "decisions": [
             {
                 "as_of": d.as_of,
@@ -104,4 +109,5 @@ def build_acquisition_lineage_manifest(
     return AcquisitionLineageManifest(
         roll_buffer_days, roll_buffer_bars, tuple(decisions), windows,
         dataset_manifest.dataset_hash, lineage_hash, max_settlement_days_forward,
+        contract_master_hash,
     )
