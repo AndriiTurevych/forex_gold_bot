@@ -16,15 +16,19 @@ experiments:
     post_accept_modification_allowed: false
     post_reject_modification_allowed: false
     implementation_policy:
-      id: EXP-0001-BASELINE-POLICY-V2
-      path: gold_cio_v9/experiments/EXP-0001-BASELINE-POLICY-V2.yaml
-      registered_blob_sha: 4c3f830c416b719e7577434ff4ee03011143d346
+      id: EXP-0001-BASELINE-POLICY-V3
+      path: gold_cio_v9/experiments/EXP-0001-BASELINE-POLICY-V3.yaml
+      registered_blob_sha: 7665aa7465249f82779f2f8f97e5640e9cfc03b8
       status: LOCKED_BEFORE_OUTCOMES
       post_outcome_modification_allowed: false
     implementation_policy_history:
       - id: EXP-0001-BASELINE-POLICY-V1
         path: gold_cio_v9/experiments/EXP-0001-BASELINE-POLICY-V1.yaml
         registered_blob_sha: f34d4f9d15c4db909a992017ef842476af3441e2
+        status: SUPERSEDED_BEFORE_OUTCOMES
+      - id: EXP-0001-BASELINE-POLICY-V2
+        path: gold_cio_v9/experiments/EXP-0001-BASELINE-POLICY-V2.yaml
+        registered_blob_sha: 4c3f830c416b719e7577434ff4ee03011143d346
         status: SUPERSEDED_BEFORE_OUTCOMES
     validation_policy:
       id: EXP-0001-VALIDATION-POLICY-V5
