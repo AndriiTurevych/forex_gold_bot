@@ -1,18 +1,19 @@
 """One-call causal orchestration for preregistered EXP-0001.
 
-This module connects the already-tested causal layers without adding strategy
-parameters or tuning logic. Upstream HTF permission and prior-trend state remain
-explicit caller inputs so the orchestrator cannot invent discretionary rules.
+This module connects the tested causal layers and now derives the frozen baseline
+trend/HTF inputs from raw bars. The evidence path therefore no longer accepts
+caller-supplied discretionary trend or HTF-permission maps.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Mapping, Sequence
+from typing import Sequence
 
 from gold_cio_v9.backtest.costs import CostAssumptions
 from gold_cio_v9.backtest.runner import BacktestResult
 from gold_cio_v9.data.governance import HistoricalBar
 from gold_cio_v9.experiments.exp0001_backtest import run_exp0001_backtest
+from gold_cio_v9.experiments.exp0001_inputs import build_exp0001_causal_inputs
 from gold_cio_v9.experiments.exp0001_sequence import assemble_replay_setups
 from gold_cio_v9.experiments.exp0001_stream import ContextPoint, build_event_stream
 from gold_cio_v9.ict_engine.causal_context import build_causal_context
@@ -42,7 +43,7 @@ def _materialize_context_points(
     bars: Sequence[HistoricalBar],
     *,
     config: PipelineConfig,
-    prior_trend_by_index: Mapping[int, str],
+    prior_trend_by_index,
 ) -> tuple[ContextPoint, ...]:
     causal = build_causal_context(
         bars,
@@ -83,24 +84,27 @@ def run_exp0001_pipeline(
     *,
     bars: Sequence[HistoricalBar],
     config: PipelineConfig,
-    prior_trend_by_index: Mapping[int, str],
-    htf_permission: Mapping[int, bool],
     costs: CostAssumptions,
 ) -> PipelineResult:
-    """Run causal context -> events -> setups -> candidates -> backtest.
+    """Run raw bars -> frozen PIT inputs -> events -> setups -> deterministic backtest.
 
-    The function is deliberately fail-closed. If the locked causal chain produces
-    no replay setups or no accepted candidates, downstream backtest validation
-    raises rather than fabricating a result.
+    No caller-supplied trend or HTF permission is accepted on the evidence path.
+    The function remains fail-closed if causal information is insufficient.
     """
     materialized = tuple(bars)
     if not materialized:
         raise ValueError("bars are required")
 
+    inputs = build_exp0001_causal_inputs(
+        materialized,
+        atr_period=config.atr_period,
+        swing_left_bars=config.swing_left_bars,
+        swing_right_bars=config.swing_right_bars,
+    )
     context = _materialize_context_points(
         materialized,
         config=config,
-        prior_trend_by_index=prior_trend_by_index,
+        prior_trend_by_index=inputs.prior_trend_by_index,
     )
     if not context:
         raise ValueError("no complete point-in-time context available")
@@ -113,7 +117,7 @@ def run_exp0001_pipeline(
         bars=materialized,
         events=events,
         context=context,
-        htf_permission=htf_permission,
+        htf_permission=inputs.htf_permission_by_index,
         horizon_bars=config.horizon_bars,
     )
     if not setups:
