@@ -2,8 +2,13 @@ from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
+from gold_cio_v9.data.contract_master import build_gc_contract_master
 from gold_cio_v9.data.dataset_manifest import build_gc_dataset_manifest
-from gold_cio_v9.data.evidence_lineage import AcquisitionLineageManifest, RollDecisionLineage
+from gold_cio_v9.data.evidence_lineage import (
+    AcquisitionLineageManifest,
+    RollDecisionLineage,
+    compute_acquisition_lineage_hash,
+)
 from gold_cio_v9.data.governance import HistoricalBar, QualityState, RollMethod
 from gold_cio_v9.experiments.exp0001_locked import LOCKED_BASE_COSTS
 from gold_cio_v9.validation.evidence_bundle import build_evidence_bundle
@@ -21,13 +26,27 @@ def _bars(*, source="massive:gc-authoritative"):
     ) for i in range(5))
 
 
+def _master():
+    return build_gc_contract_master(({
+        "ticker": "GCQ5", "product_code": "GC",
+        "first_trade_date": "2023-09-29", "last_trade_date": "2025-08-27",
+        "settlement_date": "2025-08-27",
+    },))
+
+
 def _lineage(bars):
     m = build_gc_dataset_manifest(bars)
-    return AcquisitionLineageManifest(
+    provisional = AcquisitionLineageManifest(
         5, 0,
         (RollDecisionLineage("2025-06-02", "2025-05-30", "GCQ5", (("GCQ5", 179229.0),)),),
         (("GCQ5", "2025-06-02", "2025-06-02"),),
-        m.dataset_hash, "lineage-hash", 365, "contract-master-hash",
+        m.dataset_hash, "PENDING", 365, _master().master_hash,
+    )
+    return AcquisitionLineageManifest(
+        provisional.roll_buffer_days, provisional.roll_buffer_bars,
+        provisional.decisions, provisional.fetch_windows, provisional.dataset_hash,
+        compute_acquisition_lineage_hash(provisional), provisional.max_settlement_days_forward,
+        provisional.contract_master_hash,
     )
 
 
@@ -48,7 +67,7 @@ def _macro(*, source="official:macro-calendar", with_event=True):
 def _bundle(*, bars=None, macro=None):
     bars = _bars() if bars is None else bars
     return build_evidence_bundle(
-        bars=bars, acquisition_lineage=_lineage(bars),
+        bars=bars, acquisition_lineage=_lineage(bars), contract_master=_master(),
         macro_calendar=_macro() if macro is None else macro,
         base_costs=LOCKED_BASE_COSTS,
     )
