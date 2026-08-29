@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from gold_cio_v9.experiments.exp0001_evidence_book import EvidenceBook, EvidenceBookCell, EvidenceTrade
-from gold_cio_v9.validation.exp0001_full_validation import build_validation_metrics, chronological_partition
+from gold_cio_v9.validation.exp0001_full_validation import _fold_pbo, build_validation_metrics, chronological_partition
 
 
 def _book(n=80, *, stress=False, ambiguous_ids=()):
@@ -13,13 +13,12 @@ def _book(n=80, *, stress=False, ambiguous_ids=()):
         trades = []
         for i in range(n):
             resolved = i not in set(ambiguous_ids)
-            # Deliberately identical positive ordering across horizons so PBO=0.
             pnl = (1.0 + (i % 5) * 0.1) * (0.6 if stress else 1.0)
             trades.append(EvidenceTrade(
                 contract="GCG5", horizon_minutes=h, candidate_id=f"c{i:03d}",
                 signal_time=t0 + timedelta(minutes=i * 120), direction="LONG",
                 first_touch="TARGET" if resolved else "AMBIGUOUS",
-                bars_to_first_touch=1 if resolved else 1,
+                bars_to_first_touch=1,
                 net_pnl_price=pnl if resolved else float("nan"), resolved=resolved,
             ))
         cells.append(EvidenceBookCell(
@@ -43,6 +42,19 @@ def test_partition_is_outcome_independent_and_60_20_20():
     assert p.oos_ids[0] == "c048"
 
 
+def test_fold_pbo_detects_is_winner_falling_into_oos_bottom_half():
+    # 5m wins IS but ranks last OOS -> this fold is overfit with probability 1.
+    is_rank = {5: 1, 15: 2, 30: 3, 60: 4}
+    oos_rank = {5: 4, 15: 1, 30: 2, 60: 3}
+    assert _fold_pbo(is_rank, oos_rank) == 1.0
+
+
+def test_fold_pbo_passes_when_is_winner_remains_top_half_oos():
+    is_rank = {5: 1, 15: 2, 30: 3, 60: 4}
+    oos_rank = {5: 2, 15: 1, 30: 3, 60: 4}
+    assert _fold_pbo(is_rank, oos_rank) == 0.0
+
+
 def test_full_metrics_positive_fixture():
     out = build_validation_metrics(
         base_book=_book(80), stress_1_5x_book=_book(80, stress=True),
@@ -57,12 +69,10 @@ def test_full_metrics_positive_fixture():
     assert m.effective_sample_ok is True
     assert m.walk_forward_stable is True
     assert m.data_integrity_ok is True
-    # Fixture is intentionally under the formal 200-resolved OOS acceptance minimum.
     assert m.raw_oos_setups == 16
 
 
 def test_ambiguous_oos_is_excluded_from_resolved_count_but_retained_in_rate():
-    # OOS IDs are c048..c063; make two ambiguous.
     out = build_validation_metrics(
         base_book=_book(80, ambiguous_ids=(50, 55)),
         stress_1_5x_book=_book(80, stress=True, ambiguous_ids=(50, 55)),
