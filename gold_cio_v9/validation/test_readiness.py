@@ -21,11 +21,9 @@ from gold_cio_v9.experiments.exp0001_locked import (
     assert_locked_costs,
 )
 from gold_cio_v9.validation.evidence_bundle import EvidenceBundle
+from gold_cio_v9.validation.exp0001_regimes import ALLOWED_MACRO_CATEGORIES
 from gold_cio_v9.validation.macro_calendar import validate_macro_calendar_for_bars
 
-_ALLOWED_MACRO_CATEGORIES = frozenset({
-    "FOMC", "FED_CHAIR", "CPI", "CORE_PCE", "NFP", "RETAIL_SALES",
-})
 _FORBIDDEN_SOURCE_MARKERS = ("test", "synthetic", "fixture", "mock", "sample")
 
 
@@ -86,7 +84,7 @@ def assess_exp0001_test_readiness(bundle: EvidenceBundle) -> TestReadinessReport
             decision_contracts.append(d.selected_contract)
 
     macro_categories = {e.category for e in bundle.macro_calendar.events}
-    bad_categories = tuple(sorted(macro_categories - _ALLOWED_MACRO_CATEGORIES))
+    bad_categories = tuple(sorted(macro_categories - ALLOWED_MACRO_CATEGORIES))
     bar_sources = tuple(sorted({b.source_id for b in bars}))
     nonreal_bar_sources = tuple(s for s in bar_sources if not _is_real_source(s))
 
@@ -95,6 +93,8 @@ def assess_exp0001_test_readiness(bundle: EvidenceBundle) -> TestReadinessReport
                "dataset, bundle and acquisition lineage must bind the same authoritative bars"),
         _check("contract_master_hash_present", bool(lineage.contract_master_hash.strip()),
                "immutable GC contract master hash must be present"),
+        _check("contract_master_hash_bound", lineage.contract_master_hash == bundle.contract_master.master_hash,
+               "embedded contract master must bind to acquisition lineage"),
         _check("roll_buffer_days_locked", lineage.roll_buffer_days == ROLL_BUFFER_DAYS,
                f"expected roll_buffer_days={ROLL_BUFFER_DAYS}, got {lineage.roll_buffer_days}"),
         _check("roll_buffer_bars_locked", lineage.roll_buffer_bars == ROLL_BUFFER_BARS,
