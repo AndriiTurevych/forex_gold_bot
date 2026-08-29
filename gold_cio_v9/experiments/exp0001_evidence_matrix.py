@@ -14,7 +14,7 @@ from gold_cio_v9.data.governance import HistoricalBar
 from gold_cio_v9.experiments.exp0001_pipeline import PipelineConfig, run_exp0001_pipeline
 
 
-POLICY_ID = "EXP-0001-BASELINE-POLICY-V1"
+POLICY_ID = "EXP-0001-BASELINE-POLICY-V2"
 HORIZONS_MINUTES = (5, 15, 30, 60)
 ATR_PERIOD = 14
 SWING_LEFT_BARS = 2
@@ -49,19 +49,11 @@ class EvidenceMatrixResult:
 
 
 def split_raw_contract_segments(bars: Sequence[HistoricalBar]) -> tuple[tuple[HistoricalBar, ...], ...]:
-    """Split assembled evidence bars into causal per-contract segments.
-
-    Roll-window bars are excluded before causal feature generation. Contract re-entry
-    is forbidden; adjusted/mixed identity errors are expected to have been blocked
-    by dataset governance upstream.
-    """
     if not bars:
         raise ValueError("bars are required")
     segments: list[list[HistoricalBar]] = []
-    order: list[str] = []
     seen: set[str] = set()
     current: str | None = None
-
     for bar in bars:
         if bar.instrument != "GC" or not bar.contract:
             raise ValueError("matrix requires explicit GC contract bars")
@@ -69,26 +61,19 @@ def split_raw_contract_segments(bars: Sequence[HistoricalBar]) -> tuple[tuple[Hi
             if bar.contract in seen:
                 raise ValueError("contract re-entry in evidence dataset")
             seen.add(bar.contract)
-            order.append(bar.contract)
             segments.append([])
             current = bar.contract
         if not bar.is_roll_window:
             segments[-1].append(bar)
-
     if any(not segment for segment in segments):
         raise ValueError("contract segment contains only roll-window bars")
     return tuple(tuple(s) for s in segments)
 
 
-def run_exp0001_evidence_matrix(
-    *,
-    bars: Sequence[HistoricalBar],
-    costs: CostAssumptions,
-) -> EvidenceMatrixResult:
+def run_exp0001_evidence_matrix(*, bars: Sequence[HistoricalBar], costs: CostAssumptions) -> EvidenceMatrixResult:
     segments = split_raw_contract_segments(bars)
     contracts = tuple(s[0].contract for s in segments)
     rows: list[EvidenceMatrixRow] = []
-
     for segment in segments:
         contract = segment[0].contract
         assert contract is not None
@@ -103,16 +88,11 @@ def run_exp0001_evidence_matrix(
                 rows.append(EvidenceMatrixRow(contract, horizon, status, None, None, None, 0, None))
                 continue
             rows.append(EvidenceMatrixRow(
-                contract=contract,
-                horizon_minutes=horizon,
-                status="OK",
-                context_points=result.context_points,
-                stream_events=result.stream_events,
-                replay_setups=result.replay_setups,
-                trade_count=len(result.backtest.trades),
+                contract=contract, horizon_minutes=horizon, status="OK",
+                context_points=result.context_points, stream_events=result.stream_events,
+                replay_setups=result.replay_setups, trade_count=len(result.backtest.trades),
                 result_hash=result.backtest.result_hash,
             ))
-
     expected = len(segments) * len(HORIZONS_MINUTES)
     if len(rows) != expected:
         raise RuntimeError("evidence matrix is incomplete")
