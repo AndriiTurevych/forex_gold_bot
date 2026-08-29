@@ -22,13 +22,17 @@ experiments:
       status: LOCKED_BEFORE_OUTCOMES
       post_outcome_modification_allowed: false
     validation_policy:
-      id: EXP-0001-VALIDATION-POLICY-V2
-      path: gold_cio_v9/experiments/EXP-0001-VALIDATION-POLICY-V2.yaml
-      registered_blob_sha: f7a5d07fb0c32cd83d3a539284baccceabc81a92
+      id: EXP-0001-VALIDATION-POLICY-V3
+      path: gold_cio_v9/experiments/EXP-0001-VALIDATION-POLICY-V3.yaml
+      registered_blob_sha: d2bc62f85609e8d49fbb2a3eb0223903ddc73e9d
       status: LOCKED_BEFORE_OUTCOMES
       post_outcome_modification_allowed: false
     validation_policy_history:
       - id: EXP-0001-VALIDATION-POLICY-V1
         path: gold_cio_v9/experiments/EXP-0001-VALIDATION-POLICY-V1.yaml
         registered_blob_sha: 571d6e4ec7b5162e89111ed410c6d0134dbe81f7
+        status: SUPERSEDED_BEFORE_OUTCOMES
+      - id: EXP-0001-VALIDATION-POLICY-V2
+        path: gold_cio_v9/experiments/EXP-0001-VALIDATION-POLICY-V2.yaml
+        registered_blob_sha: f7a5d07fb0c32cd83d3a539284baccceabc81a92
         status: SUPERSEDED_BEFORE_OUTCOMES
