@@ -1,10 +1,4 @@
-"""Immutable lineage manifest for causal GC evidence acquisition.
-
-The bar-level DatasetManifest proves what prices entered research. This companion
-manifest proves *why those contracts were selected*: exact PIT decision dates,
-completed liquidity-session dates, competitor volumes, selected front contracts,
-fetch windows, roll policy parameters, and the downstream dataset hash.
-"""
+"""Immutable lineage manifest for causal GC evidence acquisition."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -12,6 +6,7 @@ from hashlib import sha256
 from json import dumps
 from typing import Mapping, Sequence
 
+from gold_cio_v9.data.causal_roll import MAX_SETTLEMENT_DAYS_FORWARD
 from gold_cio_v9.data.dataset_manifest import DatasetManifest
 from gold_cio_v9.data.evidence_dataset_pipeline import LiquidityRequest
 from gold_cio_v9.data.liquid_front_calendar import LiquidFrontCalendar
@@ -35,6 +30,7 @@ class AcquisitionLineageManifest:
     fetch_windows: tuple[tuple[str, str, str], ...]
     dataset_hash: str
     lineage_hash: str
+    max_settlement_days_forward: int = MAX_SETTLEMENT_DAYS_FORWARD
 
 
 def build_acquisition_lineage_manifest(
@@ -46,9 +42,12 @@ def build_acquisition_lineage_manifest(
     dataset_manifest: DatasetManifest,
     roll_buffer_days: int,
     roll_buffer_bars: int,
+    max_settlement_days_forward: int = MAX_SETTLEMENT_DAYS_FORWARD,
 ) -> AcquisitionLineageManifest:
     if roll_buffer_days < 0 or roll_buffer_bars < 0:
         raise ValueError("roll buffers cannot be negative")
+    if max_settlement_days_forward <= 0:
+        raise ValueError("max_settlement_days_forward must be positive")
     if not requests or not calendar.days or not fetch_windows:
         raise ValueError("complete acquisition lineage inputs are required")
     if len(requests) != len(calendar.days):
@@ -76,10 +75,7 @@ def build_acquisition_lineage_manifest(
         )
         volumes = tuple(sorted((k, float(v)) for k, v in snapshot.volume_by_contract.items()))
         decisions.append(RollDecisionLineage(
-            request.as_of.isoformat(),
-            request.session_date.isoformat(),
-            day.contract,
-            volumes,
+            request.as_of.isoformat(), request.session_date.isoformat(), day.contract, volumes,
         ))
 
     extra = set(responses_by_as_of) - {r.as_of for r in requests}
@@ -90,6 +86,7 @@ def build_acquisition_lineage_manifest(
     canonical = {
         "roll_buffer_days": roll_buffer_days,
         "roll_buffer_bars": roll_buffer_bars,
+        "max_settlement_days_forward": max_settlement_days_forward,
         "decisions": [
             {
                 "as_of": d.as_of,
@@ -105,10 +102,6 @@ def build_acquisition_lineage_manifest(
     payload = dumps(canonical, sort_keys=True, separators=(",", ":"), allow_nan=False)
     lineage_hash = sha256(payload.encode("utf-8")).hexdigest()
     return AcquisitionLineageManifest(
-        roll_buffer_days,
-        roll_buffer_bars,
-        tuple(decisions),
-        windows,
-        dataset_manifest.dataset_hash,
-        lineage_hash,
+        roll_buffer_days, roll_buffer_bars, tuple(decisions), windows,
+        dataset_manifest.dataset_hash, lineage_hash, max_settlement_days_forward,
     )
