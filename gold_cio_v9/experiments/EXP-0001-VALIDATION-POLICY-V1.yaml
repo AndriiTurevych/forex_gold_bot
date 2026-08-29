@@ -1,0 +1,45 @@
+id: EXP-0001-VALIDATION-POLICY-V1
+experiment_id: EXP-0001
+status: LOCKED_BEFORE_OUTCOMES
+purpose: >
+  Freeze the statistical partition and acceptance implementation before any real
+  EXP-0001 strategy outcomes are inspected. Any later change requires a new policy ID.
+chronological_partition:
+  development_fraction: 0.60
+  oos_fraction: 0.20
+  untouched_holdout_fraction: 0.20
+  unit: resolved_setup_timestamp
+  preserve_contract_order: true
+  horizon_crossing_partition_boundary_allowed: false
+cross_validation:
+  purged_kfold: 5
+  embargo_minutes: 60
+walk_forward:
+  minimum_train_fraction_of_pre_holdout: 0.50
+  test_fraction_of_pre_holdout: 0.10
+  step_fraction_of_pre_holdout: 0.10
+  stability_rule: all_completed_test_windows_positive_expectancy
+sample:
+  minimum_resolved_oos_setups: 200
+  ambiguous_same_bar_excluded_from_resolved_count: true
+  maximum_ambiguity_rate: 0.05
+statistics:
+  dsr_alpha: 0.05
+  pbo_maximum: 0.20
+  trials_source: append_only_global_trial_registry
+concentration:
+  top_fraction: 0.05
+  top_fraction_positive_pnl_share_maximum: 0.50
+  expectancy_after_top_fraction_removal_must_be_positive: true
+costs:
+  base: locked_external_cost_assumptions
+  mandatory_stress_multiple: 1.5
+regimes:
+  catastrophic_regime_rule: >
+    Any preregistered regime with at least 30 resolved OOS observations and
+    non-positive expectancy is catastrophic. Smaller negative regime samples are
+    INSUFFICIENT_DATA for that regime and do not alone reject the global test.
+verdict:
+  values: [ACCEPT, REJECT, INSUFFICIENT_DATA]
+  ledger_first: true
+  no_manual_override: true
