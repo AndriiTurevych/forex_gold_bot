@@ -19,7 +19,7 @@ from gold_cio_v9.validation.ledger import EvidenceLedger, EvidenceRecord
 from gold_cio_v9.validation.macro_calendar import MacroCalendarSnapshot, validate_macro_calendar_for_bars
 from gold_cio_v9.validation.trials import TrialRecord, TrialsRegistry
 
-IMPLEMENTATION_POLICY = "EXP-0001-BASELINE-POLICY-V2"
+IMPLEMENTATION_POLICY = "EXP-0001-BASELINE-POLICY-V3"
 VALIDATION_POLICY = "EXP-0001-VALIDATION-POLICY-V5"
 STRESS_MULTIPLE = 1.5
 
@@ -100,11 +100,15 @@ def run_formal_exp0001_test(
         raise ValueError("supplied dataset manifest does not match authoritative bars")
     if acquisition_lineage.dataset_hash != dataset_manifest.dataset_hash:
         raise ValueError("acquisition lineage does not bind to dataset manifest")
+    if not acquisition_lineage.contract_master_hash.strip():
+        raise ValueError("formal EXP-0001 requires a hash-bound immutable contract master")
     validate_macro_calendar_for_bars(macro_calendar, materialized)
 
     data_snapshot_hash = _stable_hash({
         "dataset_hash": dataset_manifest.dataset_hash,
         "lineage_hash": acquisition_lineage.lineage_hash,
+        "contract_master_hash": acquisition_lineage.contract_master_hash,
+        "max_settlement_days_forward": acquisition_lineage.max_settlement_days_forward,
         "macro_calendar_hash": macro_calendar.calendar_hash,
         "macro_source_id": macro_calendar.source_id,
         "macro_coverage_start": macro_calendar.coverage_start.isoformat(),
@@ -114,6 +118,8 @@ def run_formal_exp0001_test(
         "experiment_id": "EXP-0001",
         "implementation_policy": IMPLEMENTATION_POLICY,
         "validation_policy": VALIDATION_POLICY,
+        "contract_master_hash": acquisition_lineage.contract_master_hash,
+        "max_settlement_days_forward": acquisition_lineage.max_settlement_days_forward,
         "base_costs": asdict(base_costs),
         "stress_multiple": STRESS_MULTIPLE,
     }
