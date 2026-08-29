@@ -28,17 +28,16 @@ def test_directional_permission_is_explicit():
 
 
 def test_prior_day_midpoint_permission_uses_completed_day_only():
-    # Two UTC days. Day 1 range = 90..110, midpoint 100. Day 2 close 95 -> LONG only.
+    # Two UTC days. Day 1 range midpoint is 100. Day 2 close 95 -> LONG only.
     values = []
     t0 = datetime(2026, 1, 5, 23, 55, tzinfo=timezone.utc)
     for i, c in enumerate([100, 110, 90, 100, 100, 95]):
-        out = HistoricalBar(
+        values.append(HistoricalBar(
             instrument="GC", contract="GCG6", event_time=t0 + timedelta(minutes=i),
             open=c, high=c + 1, low=c - 1, close=c, volume=10.0,
             quality_state=QualityState.VERIFIED, source_id="TEST",
             roll_method=RollMethod.RAW_CONTRACT,
-        )
-        values.append(out)
+        ))
     state = build_exp0001_causal_inputs(values, atr_period=1, swing_left_bars=1, swing_right_bars=1)
     day2_idx = 5
     assert state.htf_permission_by_index[day2_idx].long is True
@@ -49,10 +48,10 @@ def test_prior_day_midpoint_permission_uses_completed_day_only():
 def test_current_bar_cannot_rewrite_its_prior_day_permission():
     t0 = datetime(2026, 1, 5, 23, 57, tzinfo=timezone.utc)
     bars = [
-        HistoricalBar("GC", t0, 100, 101, 99, 100, 10, QualityState.VERIFIED, "TEST", "GCG6", RollMethod.RAW_CONTRACT),
-        HistoricalBar("GC", t0 + timedelta(minutes=1), 100, 111, 89, 100, 10, QualityState.VERIFIED, "TEST", "GCG6", RollMethod.RAW_CONTRACT),
-        HistoricalBar("GC", t0 + timedelta(minutes=2), 100, 101, 99, 100, 10, QualityState.VERIFIED, "TEST", "GCG6", RollMethod.RAW_CONTRACT),
-        HistoricalBar("GC", t0 + timedelta(minutes=3), 95, 1000, 1, 95, 10, QualityState.VERIFIED, "TEST", "GCG6", RollMethod.RAW_CONTRACT),
+        HistoricalBar(instrument="GC", contract="GCG6", event_time=t0, open=100, high=101, low=99, close=100, volume=10, quality_state=QualityState.VERIFIED, source_id="TEST", roll_method=RollMethod.RAW_CONTRACT),
+        HistoricalBar(instrument="GC", contract="GCG6", event_time=t0 + timedelta(minutes=1), open=100, high=111, low=89, close=100, volume=10, quality_state=QualityState.VERIFIED, source_id="TEST", roll_method=RollMethod.RAW_CONTRACT),
+        HistoricalBar(instrument="GC", contract="GCG6", event_time=t0 + timedelta(minutes=2), open=100, high=101, low=99, close=100, volume=10, quality_state=QualityState.VERIFIED, source_id="TEST", roll_method=RollMethod.RAW_CONTRACT),
+        HistoricalBar(instrument="GC", contract="GCG6", event_time=t0 + timedelta(minutes=3), open=95, high=1000, low=1, close=95, volume=10, quality_state=QualityState.VERIFIED, source_id="TEST", roll_method=RollMethod.RAW_CONTRACT),
     ]
     state = build_exp0001_causal_inputs(bars, atr_period=1, swing_left_bars=1, swing_right_bars=1)
     p = state.htf_permission_by_index[3]
@@ -60,7 +59,6 @@ def test_current_bar_cannot_rewrite_its_prior_day_permission():
 
 
 def test_trend_requires_two_confirmed_highs_and_lows():
-    # Oscillating series creates multiple confirmed extrema; trend is unavailable early.
     values = [
         (100,101,99,100), (102,103,101,102), (100,101,98,99),
         (104,105,103,104), (102,103,100,101), (106,107,105,106),
@@ -71,7 +69,7 @@ def test_trend_requires_two_confirmed_highs_and_lows():
     assert any(v == "BULLISH" for v in state.prior_trend_by_index.values())
 
 
-def test_roll_window_or_mixed_contract_fails_via_causal_context():
+def test_mixed_contract_fails_via_causal_context():
     bars = _bars([(100,101,99,100), (101,102,100,101), (100,101,99,100)])
     bars[1] = HistoricalBar(
         instrument="GC", contract="GCJ6", event_time=bars[1].event_time,
