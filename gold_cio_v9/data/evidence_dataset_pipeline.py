@@ -1,31 +1,17 @@
-"""End-to-end deterministic assembly of causal raw-contract GC evidence data.
-
-This module closes the acquisition chain before strategy outcomes are evaluated:
-PIT metadata -> explicit prior-session liquidity requests -> causal liquid front
-calendar -> raw 1-minute contract fetch windows -> complete-page validation ->
-raw-contract dataset assembly -> immutable manifest/hash.
-
-No network I/O, parameter optimization, price adjustment, interpolation, volume/OI
-hindsight, or strategy outcome logic is permitted here.
-"""
+"""End-to-end deterministic assembly of causal raw-contract GC evidence data."""
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
 from typing import Any, Mapping, Sequence
 
+from gold_cio_v9.data.causal_roll import MAX_SETTLEMENT_DAYS_FORWARD, causal_front_candidates
 from gold_cio_v9.data.dataset_assembly import assemble_gc_dataset
 from gold_cio_v9.data.dataset_manifest import DatasetManifest, build_gc_dataset_manifest
 from gold_cio_v9.data.governance import HistoricalBar
-from gold_cio_v9.data.liquid_front_calendar import (
-    LiquidFrontCalendar,
-    build_liquid_front_calendar,
-)
+from gold_cio_v9.data.liquid_front_calendar import LiquidFrontCalendar, build_liquid_front_calendar
 from gold_cio_v9.data.massive_contracts import parse_massive_gc_contracts
-from gold_cio_v9.data.massive_fetch_plan import (
-    ContractFetchWindow,
-    parse_complete_massive_gc_pages,
-)
+from gold_cio_v9.data.massive_fetch_plan import ContractFetchWindow, parse_complete_massive_gc_pages
 from gold_cio_v9.data.prior_session_liquidity import build_prior_session_liquidity
 
 
@@ -49,14 +35,10 @@ def build_liquidity_request_plan(
     *,
     dates: Sequence[date],
     prior_session_date_by_as_of: Mapping[date, date],
+    roll_buffer_days: int = 5,
+    max_settlement_days_forward: int = MAX_SETTLEMENT_DAYS_FORWARD,
 ) -> tuple[LiquidityRequest, ...]:
-    """Freeze the exact completed-session volume requests needed for causal rolling.
-
-    Trading-session dates are caller supplied intentionally: this layer does not
-    guess weekends/holidays or infer a prior trading session from future data.
-    Each request contains every active outright GC contract in that day's PIT
-    metadata snapshot so missing/zero volume can later be distinguished explicitly.
-    """
+    """Freeze exact prior-session requests for the locked bounded front universe."""
     if not dates:
         raise ValueError("dates are required")
     if len(set(dates)) != len(dates):
@@ -75,8 +57,13 @@ def build_liquidity_request_plan(
         if session_date >= as_of:
             raise ValueError("prior session date must be strictly before as_of")
         specs = parse_massive_gc_contracts(rows, as_of=as_of)
-        contracts = tuple(spec.ticker for spec in specs)
-        requests.append(LiquidityRequest(as_of, session_date, contracts))
+        candidates = causal_front_candidates(
+            specs,
+            as_of=as_of,
+            roll_buffer_days=roll_buffer_days,
+            max_settlement_days_forward=max_settlement_days_forward,
+        )
+        requests.append(LiquidityRequest(as_of, session_date, tuple(spec.ticker for spec in candidates)))
 
     unexpected = set(prior_session_date_by_as_of) - set(dates)
     if unexpected:
@@ -90,8 +77,8 @@ def build_calendar_from_liquidity_responses(
     requests: Sequence[LiquidityRequest],
     responses_by_as_of: Mapping[date, Mapping[str, Sequence[Mapping[str, object]]]],
     roll_buffer_days: int = 5,
+    max_settlement_days_forward: int = MAX_SETTLEMENT_DAYS_FORWARD,
 ) -> LiquidFrontCalendar:
-    """Materialize prior-session snapshots and build the causal liquid front chain."""
     if not requests:
         raise ValueError("liquidity requests are required")
     dates = tuple(r.as_of for r in requests)
@@ -112,28 +99,23 @@ def build_calendar_from_liquidity_responses(
     unexpected = set(responses_by_as_of) - set(dates)
     if unexpected:
         raise ValueError("liquidity responses contain dates outside request plan")
-
     return build_liquid_front_calendar(
         snapshots,
         prior,
         dates=dates,
         roll_buffer_days=roll_buffer_days,
+        max_settlement_days_forward=max_settlement_days_forward,
     )
 
 
-def build_liquid_contract_fetch_plan(
-    calendar: LiquidFrontCalendar,
-) -> tuple[ContractFetchWindow, ...]:
-    """Compress causal daily assignments into one chronological fetch window/contract."""
+def build_liquid_contract_fetch_plan(calendar: LiquidFrontCalendar) -> tuple[ContractFetchWindow, ...]:
     if not calendar.days or not calendar.contract_order:
         raise ValueError("liquid front calendar is empty")
-
     windows: list[ContractFetchWindow] = []
     seen: set[str] = set()
     current = calendar.days[0].contract
     start = calendar.days[0].as_of
     previous = calendar.days[0].as_of
-
     for day in calendar.days[1:]:
         if day.as_of <= previous:
             raise ValueError("calendar dates must be strictly increasing")
@@ -146,7 +128,6 @@ def build_liquid_contract_fetch_plan(
             start = day.as_of
         previous = day.as_of
     windows.append(ContractFetchWindow(current, start, previous))
-
     if tuple(w.contract for w in windows) != calendar.contract_order:
         raise ValueError("fetch-plan order does not match causal contract_order")
     return tuple(windows)
@@ -158,19 +139,12 @@ def assemble_evidence_dataset(
     pages_by_contract: Mapping[str, Sequence[Mapping[str, Any]]],
     roll_buffer_bars: int = 1,
 ) -> EvidenceDatasetResult:
-    """Validate complete Massive pages, assemble raw contracts, and freeze identity.
-
-    Every planned contract must have an explicit completed pagination chain and no
-    extra contract payload is accepted. The final manifest hash therefore identifies
-    the exact authoritative bar set that may enter EXP-0001 research.
-    """
     windows = build_liquid_contract_fetch_plan(calendar)
     planned = tuple(w.contract for w in windows)
     if set(pages_by_contract) != set(planned):
         missing = sorted(set(planned) - set(pages_by_contract))
         extra = sorted(set(pages_by_contract) - set(planned))
         raise ValueError(f"aggregate page coverage mismatch missing={missing} extra={extra}")
-
     contract_bars: dict[str, tuple[HistoricalBar, ...]] = {}
     for window in windows:
         contract_bars[window.contract] = parse_complete_massive_gc_pages(
@@ -179,7 +153,6 @@ def assemble_evidence_dataset(
             start_date=window.start_date,
             end_date=window.end_date,
         )
-
     bars = assemble_gc_dataset(
         contract_bars,
         contract_order=calendar.contract_order,
