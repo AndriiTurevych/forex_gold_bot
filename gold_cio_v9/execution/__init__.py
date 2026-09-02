@@ -16,6 +16,10 @@ from .journal import JournalEvent, SQLiteExecutionJournal, replay
 from .reconciliation import ReconciliationResult, ReconciliationSnapshot, reconcile
 from .shadow_live import TwinComparison, TwinFill, compare_shadow_live
 from .broker_contract import BrokerAck, BrokerAdapter, BrokerOrderRequest, OrderType, TimeInForce
+from .durable_idempotency import DurableIdempotencyStore, Reservation, ReservationStatus
+from .clock_health import ClockDecision, ClockLimits, ClockSample, evaluate_clock
+from .feed_health import FeedDecision, FeedLimits, FeedSnapshot, evaluate_feed
+from .watchdog import ExecutionWatchdog, KillReason, WatchdogStatus
 
 __all__ = [
     "LatencyBudget",
@@ -51,4 +55,18 @@ __all__ = [
     "BrokerAdapter",
     "OrderType",
     "TimeInForce",
+    "DurableIdempotencyStore",
+    "Reservation",
+    "ReservationStatus",
+    "ClockDecision",
+    "ClockLimits",
+    "ClockSample",
+    "evaluate_clock",
+    "FeedDecision",
+    "FeedLimits",
+    "FeedSnapshot",
+    "evaluate_feed",
+    "ExecutionWatchdog",
+    "KillReason",
+    "WatchdogStatus",
 ]
