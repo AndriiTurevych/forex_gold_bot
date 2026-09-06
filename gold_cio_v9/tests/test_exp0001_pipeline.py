@@ -101,6 +101,52 @@ def test_incomplete_context_fails_closed(monkeypatch):
         )
 
 
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"prior_day_high": 3980.0, "prior_day_low": 3980.0},
+        {
+            "latest_swing_high": ConfirmedSwing(
+                "HIGH",
+                3990.0,
+                datetime(2026, 8, 20, 11, 59, tzinfo=timezone.utc),
+                datetime(2026, 8, 20, 12, 0, tzinfo=timezone.utc),
+                1,
+                1,
+            ),
+            "latest_swing_low": ConfirmedSwing(
+                "LOW",
+                3990.0,
+                datetime(2026, 8, 20, 11, 59, tzinfo=timezone.utc),
+                datetime(2026, 8, 20, 12, 0, tzinfo=timezone.utc),
+                1,
+                1,
+            ),
+        },
+    ],
+)
+def test_degenerate_price_context_is_ineligible(monkeypatch, overrides):
+    c = _context()
+    monkeypatch.setattr(
+        pipeline,
+        "build_exp0001_causal_inputs",
+        lambda *a, **k: CausalInputState(
+            {0: "BULLISH"}, {0: DirectionalPermission(True, False)}
+        ),
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "build_causal_context",
+        lambda *a, **k: (SimpleNamespace(**{**c.__dict__, **overrides}),),
+    )
+    with pytest.raises(ValueError, match="no complete point-in-time context"):
+        pipeline.run_exp0001_pipeline(
+            bars=(_bar(),),
+            config=pipeline.PipelineConfig(14, 2, 2, 30),
+            costs=_costs(),
+        )
+
+
 def test_invalid_prior_trend_fails_closed(monkeypatch):
     monkeypatch.setattr(pipeline, "build_exp0001_causal_inputs", lambda *a, **k: CausalInputState({0: "SIDEWAYS"}, {0: DirectionalPermission(True, False)}))
     monkeypatch.setattr(pipeline, "build_causal_context", lambda *a, **k: (_context(),))
