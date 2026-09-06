@@ -112,6 +112,18 @@ def test_session_parser_keeps_holiday_extended_session_start():
     assert bars[0].event_time.date() == date(2025, 5, 25)
 
 
+def test_session_parser_keeps_holiday_plus_weekend_session_start():
+    pages = [{"results": [
+        _row("GCQ6", 0, day=date(2026, 6, 18), session_end_date=date(2026, 6, 22)),
+    ]}]
+    bars = parse_complete_massive_gc_session_pages(
+        pages, expected_contract="GCQ6",
+        start_session_date=date(2026, 6, 22), end_session_date=date(2026, 6, 22),
+    )
+    assert len(bars) == 1
+    assert bars[0].event_time.date() == date(2026, 6, 18)
+
+
 def test_session_parser_requires_session_end_date():
     pages = [{"results": [_row("GCQ5", 0)]}]
     with pytest.raises(ValueError, match="missing session_end_date"):
@@ -123,7 +135,7 @@ def test_session_parser_requires_session_end_date():
 
 def test_session_parser_reports_identity_for_inconsistent_timestamp():
     pages = [{"results": [
-        _row("GCQ5", 0, day=date(2025, 5, 30), session_end_date=date(2025, 6, 2)),
+        _row("GCQ5", 0, day=date(2025, 5, 28), session_end_date=date(2025, 6, 2)),
     ]}]
     with pytest.raises(ValueError) as excinfo:
         parse_complete_massive_gc_session_pages(
@@ -132,9 +144,9 @@ def test_session_parser_reports_identity_for_inconsistent_timestamp():
         )
     message = str(excinfo.value)
     assert "contract=GCQ5" in message
-    assert "event_day=2025-05-30" in message
+    assert "event_day=2025-05-28" in message
     assert "session_end_date=2025-06-02" in message
-    assert "calendar_day_delta=-3" in message
+    assert "calendar_day_delta=-5" in message
 
 
 def test_final_page_with_next_url_is_incomplete():
