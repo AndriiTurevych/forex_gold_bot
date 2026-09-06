@@ -189,3 +189,4 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 # EXP-0001 production-evidence run: macro boundary and causal QA fixes
+# EXP-0001 production-evidence run: preregistration lock synchronized
