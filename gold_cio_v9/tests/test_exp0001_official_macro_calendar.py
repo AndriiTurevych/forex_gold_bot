@@ -9,7 +9,8 @@ CALENDAR = Path("gold_cio_v9/experiments/EXP-0001-macro-calendar-official-v1.jso
 
 def test_official_macro_calendar_is_causal_and_covers_evidence_period():
     snapshot = load_macro_calendar_json(CALENDAR)
-    assert snapshot.coverage_start == date(2025, 4, 3)
+    # The 2025-04-03 GC session opens on the preceding UTC date.
+    assert snapshot.coverage_start == date(2025, 4, 2)
     assert snapshot.coverage_end == date(2026, 8, 27)
     assert snapshot.source_id.startswith("official:")
     assert len(snapshot.events) == 43
