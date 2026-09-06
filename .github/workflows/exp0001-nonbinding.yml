@@ -121,7 +121,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m pytest -q gold_cio_v9/tests
-          python -m pytest -q gold_cio_v9/tester_trust
+          python -m pytest -q gold_cio_v9/tests/trust
 
       - name: Acquire authoritative GC evidence
         env:
