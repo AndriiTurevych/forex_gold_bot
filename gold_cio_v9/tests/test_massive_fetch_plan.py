@@ -100,6 +100,18 @@ def test_session_parser_discards_following_session_query_padding():
     assert all(b.event_time.minute != 2 for b in bars)
 
 
+def test_session_parser_keeps_holiday_extended_session_start():
+    pages = [{"results": [
+        _row("GCM5", 0, day=date(2025, 5, 25), session_end_date=date(2025, 5, 27)),
+    ]}]
+    bars = parse_complete_massive_gc_session_pages(
+        pages, expected_contract="GCM5",
+        start_session_date=date(2025, 5, 27), end_session_date=date(2025, 5, 27),
+    )
+    assert len(bars) == 1
+    assert bars[0].event_time.date() == date(2025, 5, 25)
+
+
 def test_session_parser_requires_session_end_date():
     pages = [{"results": [_row("GCQ5", 0)]}]
     with pytest.raises(ValueError, match="missing session_end_date"):
