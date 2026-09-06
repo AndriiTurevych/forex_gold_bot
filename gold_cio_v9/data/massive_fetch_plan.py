@@ -17,6 +17,9 @@ from gold_cio_v9.data.governance import HistoricalBar
 from gold_cio_v9.data.massive_gc import parse_massive_gc_aggs
 
 
+MAX_GC_SESSION_CALENDAR_SPAN_DAYS = 4
+
+
 @dataclass(frozen=True)
 class ContractFetchWindow:
     contract: str
@@ -139,9 +142,8 @@ def parse_complete_massive_gc_session_pages(
     through ``end_session_date``. Rows from the one-day query padding are expected
     and are filtered solely by ``session_end_date``. Every raw row must still be the
     requested outright contract. A regular session may start on the preceding UTC
-    day; an exchange-holiday session may start two UTC calendar days before its
-    declared session end date. Larger gaps and timestamps after the session date
-    fail closed.
+    day; an exchange-holiday plus weekend may extend that relationship to four UTC
+    calendar days. Larger gaps and timestamps after the session date fail closed.
     """
     if end_session_date < start_session_date:
         raise ValueError("end_session_date precedes start_session_date")
@@ -183,7 +185,11 @@ def parse_complete_massive_gc_session_pages(
         if session_date is None:
             raise RuntimeError("normalized bar lost Massive session identity")
         event_day = bar.event_time.astimezone(timezone.utc).date()
-        if not (session_date - timedelta(days=2) <= event_day <= session_date):
+        if not (
+            session_date - timedelta(days=MAX_GC_SESSION_CALENDAR_SPAN_DAYS)
+            <= event_day
+            <= session_date
+        ):
             raise ValueError(
                 "bar timestamp is inconsistent with Massive session_end_date: "
                 f"contract={expected_contract} event_time={bar.event_time.isoformat()} "
