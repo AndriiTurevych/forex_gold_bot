@@ -61,6 +61,15 @@ def _materialize_context_points(
             or c.latest_swing_low is None
         ):
             continue
+        # A valid sweep/MSS context requires two strictly ordered price levels.
+        # Independently confirmed extrema can temporarily collapse or cross on
+        # flat/outside-bar data. Such a point carries no defined dealing range,
+        # so it is ineligible for event generation rather than a malformed bar.
+        if (
+            c.prior_day_high <= c.prior_day_low
+            or c.latest_swing_high.price <= c.latest_swing_low.price
+        ):
+            continue
         trend = prior_trend_by_index.get(c.index)
         if trend is None:
             continue
