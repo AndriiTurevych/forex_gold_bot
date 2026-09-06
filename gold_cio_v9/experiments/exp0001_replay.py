@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from gold_cio_v9.backtest.runner import TradeCandidate
-from gold_cio_v9.experiments.exp0001_candidates import build_trade_candidate
+from gold_cio_v9.experiments.exp0001_candidates import build_trade_candidate, swept_extreme
 from gold_cio_v9.experiments.exp0001_signal import FVGZone, TimedStructure, TimedSweep, generate_exp0001_signal
 from gold_cio_v9.ict_engine.features import Bar
 
@@ -64,6 +64,18 @@ def build_replay_candidates(setups: list[ReplaySetup]) -> tuple[TradeCandidate, 
             retest_bar=setup.retest_bar,
         )
         if signal is None:
+            continue
+
+        # The locked stop is the swept extreme. If a later FVG retest produces
+        # an entry on or beyond that stop, no positive risk interval exists and
+        # therefore no executable candidate exists. Reject the setup unchanged;
+        # never move the stop or entry to manufacture valid geometry.
+        stop = swept_extreme(signal, sweep_depth=setup.sweep_depth)
+        if (
+            signal.direction == "LONG" and stop >= signal.entry_price
+        ) or (
+            signal.direction == "SHORT" and stop <= signal.entry_price
+        ):
             continue
 
         candidates.append(
