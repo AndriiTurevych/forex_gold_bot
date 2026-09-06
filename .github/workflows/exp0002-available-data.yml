@@ -1,0 +1,43 @@
+name: EXP-0002 Available Data Inventory
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [gold-cio-v9]
+    paths:
+      - '.github/workflows/exp0002-available-data.yml'
+      - 'scripts/inventory_exp0002_available_aggregates.py'
+      - 'gold_cio_v9/tests/test_exp0002_available_aggregates.py'
+
+permissions:
+  contents: read
+
+jobs:
+  inventory-current-plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PYTHONPATH: .
+      MASSIVE_API_KEY: ${{ secrets.MASSIVE_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify outcome-free inventory contract
+        run: |
+          set -euo pipefail
+          python -m pip install -q pytest
+          python -m pytest -q gold_cio_v9/tests/test_exp0002_available_aggregates.py
+      - name: Inventory accessible historical aggregates
+        run: |
+          set -euo pipefail
+          python scripts/inventory_exp0002_available_aggregates.py | tee exp0002-available-data.json
+      - name: Upload access inventory
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: exp0002-available-data-${{ github.sha }}
+          path: exp0002-available-data.json
+          if-no-files-found: ignore
+          retention-days: 90
