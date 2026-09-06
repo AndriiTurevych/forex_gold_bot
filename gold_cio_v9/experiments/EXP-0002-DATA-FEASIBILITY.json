@@ -1,0 +1,22 @@
+{
+  "schema": "gold-cio-data-feasibility-v1",
+  "experiment_id": "EXP-0002",
+  "checked_at": "2026-09-06T17:18:35Z",
+  "git_commit": "74c8d9619472778982f8d78d007f00787404d95b",
+  "workflow_run_id": 34048190282,
+  "workflow_job_id": 101526924729,
+  "workflow_artifact_id": 9993735605,
+  "provider": "Massive",
+  "endpoint": "/futures/v1/trades/GCG5",
+  "session_end_date": "2025-01-15",
+  "secret_present": true,
+  "preregistration_tests": {
+    "passed": 4,
+    "failed": 0
+  },
+  "microstructure_entitlement": "BLOCKED",
+  "reason": "Historical futures trades endpoint returned HTTP 403",
+  "quotes_probe_reached": false,
+  "strategy_outcomes_generated": false,
+  "resolution": "Enable Massive futures trades and quotes historical entitlement, then rerun the unchanged probe"
+}
