@@ -1,0 +1,54 @@
+name: EXP-0002 Structural Dry Run
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [gold-cio-v9]
+    paths:
+      - '.github/workflows/exp0002-structural-dry-run.yml'
+      - 'scripts/build_exp0002_structural_windows.py'
+      - 'gold_cio_v9/tests/test_exp0002_structural_windows.py'
+
+permissions:
+  contents: read
+
+jobs:
+  available-tail-structural-windows:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      PYTHONPATH: .
+      MASSIVE_API_KEY: ${{ secrets.MASSIVE_API_KEY }}
+      DRY_RUN_START: '2025-02-03'
+      DRY_RUN_END: '2025-04-01'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install and verify outcome-free contract
+        run: |
+          set -euo pipefail
+          python -m pip install -q pytest pyyaml numpy
+          python -m pytest -q gold_cio_v9/tests/test_exp0002_structural_windows.py
+      - name: Acquire available independent GC tail
+        run: |
+          set -euo pipefail
+          mkdir -p exp0002_dry_run
+          python scripts/acquire_exp0001_massive.py \
+            --start "$DRY_RUN_START" --end "$DRY_RUN_END" \
+            --output-dir exp0002_dry_run
+      - name: Bind structural candidate windows without outcomes
+        run: |
+          set -euo pipefail
+          python scripts/build_exp0002_structural_windows.py \
+            --bars exp0002_dry_run/bars.jsonl \
+            --output exp0002_dry_run/structural_windows.json
+      - name: Upload dry-run evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: exp0002-structural-dry-run-${{ github.sha }}
+          path: exp0002_dry_run/
+          if-no-files-found: warn
+          retention-days: 30
