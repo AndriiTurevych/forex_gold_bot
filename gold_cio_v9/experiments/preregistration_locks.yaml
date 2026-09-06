@@ -82,3 +82,8 @@ experiments:
       workflow_run_id: 34048190282
       workflow_artifact_id: 9993735605
       outcome_computation_allowed: false
+    available_tail_dry_run:
+      path: gold_cio_v9/experiments/EXP-0002-STRUCTURAL-DRY-RUN.json
+      registered_blob_sha: cdc60c46ac29a576ce7ebc26bedc1c99ab4b9faf
+      status: SEALED_OUTCOME_FREE
+      formal_verdict_allowed: false

@@ -1,0 +1,23 @@
+{
+  "schema": "gold-cio-exp0002-structural-dry-run-record-v1",
+  "experiment_id": "EXP-0002",
+  "scope": "AVAILABLE_TAIL_ENGINEERING_DRY_RUN_ONLY",
+  "git_commit": "0be8ef35ad3f9979d02e6d01d3e16bc668cc3692",
+  "workflow_run_id": 34049039231,
+  "workflow_job_id": 101529203753,
+  "workflow_artifact_id": 9994042646,
+  "artifact_sha256": "3416ab128cd2218c052ea5e001b668063a1980575e3e94e3d14b4bba23687812",
+  "coverage_session_start": "2025-02-03",
+  "coverage_session_end": "2025-04-01",
+  "bars": 55151,
+  "contracts": ["GCJ5", "GCM5"],
+  "dataset_hash": "4728f88bc66489b7d008f9c9741b52e9a1c40716e7a76c65f1521ab39d544c4f",
+  "lineage_hash": "4df29607bf098a64411e10c3ac906c2c976c954d73e465573aac671bb1313af4",
+  "contract_master_hash": "6d1adb6691065716d45bc3f0f4041953f0f62b14425c4dc1a2a2fd59894f5af6",
+  "candidate_count": 39,
+  "candidate_windows_hash": "77f1be598861c2d558b4989801246f87cd808474f4abd749ea6dfb2ac4577427",
+  "complete_preregistered_evidence": false,
+  "tick_flow_applied": false,
+  "strategy_outcomes_generated": false,
+  "formal_verdict_allowed": false
+}

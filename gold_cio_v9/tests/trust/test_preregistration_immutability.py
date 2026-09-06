@@ -90,6 +90,10 @@ def test_exp0002_preregistration_matches_locked_blob_before_outcomes():
     assert feasibility["status"] == "BLOCKED_ENTITLEMENT"
     assert feasibility["outcome_computation_allowed"] is False
     assert git_blob_sha(feasibility["path"]) == feasibility["registered_blob_sha"]
+    dry_run = experiment["available_tail_dry_run"]
+    assert dry_run["status"] == "SEALED_OUTCOME_FREE"
+    assert dry_run["formal_verdict_allowed"] is False
+    assert git_blob_sha(dry_run["path"]) == dry_run["registered_blob_sha"]
     lock = load_lock(LOCK_PATH, "EXP-0002")
     assert_preregistration_immutable(lock)
 
