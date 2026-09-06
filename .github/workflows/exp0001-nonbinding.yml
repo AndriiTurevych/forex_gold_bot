@@ -20,7 +20,7 @@ permissions:
 
 env:
   PYTHONUNBUFFERED: '1'
-  PYTHONPATH: '.'
+  PYTHONPATH: '.'  # Make the repository package importable from scripts/ entry points.
   EXP_ID: 'EXP-0001'
   EVIDENCE_START: '2025-04-03'
   EVIDENCE_END: '2026-08-27'
