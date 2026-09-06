@@ -15,6 +15,12 @@ experiments:
     verdict_transfer_allowed: false
     post_accept_modification_allowed: false
     post_reject_modification_allowed: false
+    closure:
+      path: gold_cio_v9/experiments/EXP-0001-CLOSURE.json
+      registered_blob_sha: 832771f652c024a68380b380bc9b6ce03e0762ef
+      status: CLOSED_NONBINDING
+      verdict: INSUFFICIENT_DATA
+      post_outcome_modification_allowed: false
     implementation_policy:
       id: EXP-0001-BASELINE-POLICY-V5
       path: gold_cio_v9/experiments/EXP-0001-BASELINE-POLICY-V5.yaml
@@ -61,3 +67,14 @@ experiments:
         path: gold_cio_v9/experiments/EXP-0001-VALIDATION-POLICY-V4.yaml
         registered_blob_sha: 70748e9dc79be876347cb8855f852bad2e89bbd8
         status: SUPERSEDED_BEFORE_OUTCOMES
+  EXP-0002:
+    path: gold_cio_v9/experiments/EXP-0002.yaml
+    registered_blob_sha: 50458202f6d4c36b6e45efa5e0c00532e3e9698b
+    status: LOCKED_BEFORE_OUTCOMES
+    primary_instrument: GC
+    provider: MASSIVE
+    outcomes_computed: false
+    post_outcome_modification_allowed: false
+    data_feasibility:
+      status: PENDING
+      outcome_computation_allowed: false

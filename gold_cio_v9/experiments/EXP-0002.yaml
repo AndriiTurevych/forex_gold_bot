@@ -1,0 +1,83 @@
+id: EXP-0002
+name: flow_confirmed_liquidity_reversal_v1
+status: LOCKED_BEFORE_OUTCOMES
+created_after: EXP-0001-CLOSED_NONBINDING
+strategy_outcomes_generated: false
+primary_instrument: GC
+secondary_instrument: XAUUSD
+secondary_scope: CROSS_CHECK_ONLY
+verdict_transfer_allowed: false
+hypothesis: >
+  A causal imbalance in buyer- versus seller-initiated COMEX GC trade volume,
+  observed after a preregistered liquidity-sweep reversal sequence, identifies a
+  smaller subset with positive 60-minute net expectancy and better expectancy than
+  the identical structural baseline without order-flow confirmation.
+independence:
+  exp0001_parameter_reuse: frozen_structural_sequence_only
+  exp0001_result_used_to_select_thresholds: false
+  evidence_overlap_with_exp0001: forbidden
+  evidence_start: '2022-01-03'
+  evidence_end: '2025-04-01'
+data:
+  provider: Massive
+  venue: COMEX
+  product: GC
+  contracts: raw_outrights_only
+  trades_endpoint: /futures/v1/trades/{ticker}
+  quotes_endpoint: /futures/v1/quotes/{ticker}
+  required_history_entitlement: full_evidence_period
+  provider_choice_locked: true
+  quote_and_trade_lineage_hash_required: true
+  session_end_date_required: true
+  sequence_numbers_required: true
+  acquisition_strategy: >
+    First bind structural candidate windows from outcome-free 1-minute bars; then
+    acquire every tick trade and BBO quote in those windows. Candidate-window
+    selection and tick-data acquisition hashes must be sealed before labels run.
+order_flow:
+  window_seconds: 60
+  window_end: structural_confirmation_bar_close
+  prevailing_quote_rule: latest_quote_timestamp_not_after_trade
+  maximum_quote_age_milliseconds: 2000
+  buy_initiated_rule: trade_price_greater_than_or_equal_to_prevailing_ask
+  sell_initiated_rule: trade_price_less_than_or_equal_to_prevailing_bid
+  inside_or_unmatched_trade_rule: unsigned
+  classified_volume_minimum_fraction: 0.80
+  imbalance_formula: (buy_volume-sell_volume)/(buy_volume+sell_volume)
+  long_imbalance_minimum: 0.20
+  short_imbalance_maximum: -0.20
+  threshold_search_allowed: false
+arms:
+  baseline: frozen_structural_sequence_without_flow_filter
+  challenger: frozen_structural_sequence_with_locked_directional_flow_filter
+  identical_candidate_timing_before_flow_filter: true
+execution:
+  decision_time: flow_window_close
+  entry: next_eligible_1m_bar_open
+  stop: beyond_original_swept_extreme
+  target: contemporaneous_opposing_liquidity
+  invalid_or_nonpositive_risk_interval: abstain
+  horizons_minutes: [5, 15, 30, 60]
+  primary_horizon_minutes: 60
+validation:
+  chronological_partition: [0.60, 0.20, 0.20]
+  minimum_resolved_oos_primary: 200
+  purged_kfold: 5
+  embargo_minutes: 60
+  untouched_holdout_required: true
+  deflated_sharpe_required: true
+  pbo_required: true
+  base_costs_round_trip_floor_price: 0.35
+  cost_stress_multiple: 1.5
+promotion:
+  challenger_oos_expectancy_positive: true
+  challenger_oos_profit_factor_minimum: 1.30
+  challenger_expectancy_must_exceed_baseline: true
+  holdout_expectancy_positive: true
+  cost_stress_expectancy_positive: true
+  no_single_period_or_regime_pnl_share_above: 0.30
+governance:
+  data_entitlement_probe_may_run_before_outcomes: true
+  implementation_may_not_generate_labels_until_test_ready: true
+  any_feature_threshold_or_timing_change_requires_new_experiment_id: true
+  post_result_parameter_rescue_allowed: false

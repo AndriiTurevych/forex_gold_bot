@@ -26,7 +26,7 @@ class PreregistrationLock:
 def load_lock(lock_path: str | Path, experiment_id: str) -> PreregistrationLock:
     raw: dict[str, Any] = yaml.safe_load(Path(lock_path).read_text(encoding="utf-8"))
     item = raw["experiments"][experiment_id]
-    if item.get("status") != "LOCKED":
+    if item.get("status") not in {"LOCKED", "LOCKED_BEFORE_OUTCOMES"}:
         raise PreregistrationPolicyError(f"PREREG_NOT_LOCKED:{experiment_id}")
     return PreregistrationLock(
         experiment_id=experiment_id,

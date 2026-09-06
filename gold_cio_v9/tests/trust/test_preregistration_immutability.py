@@ -14,9 +14,9 @@ from gold_cio_v9.validation.preregistration import (
 LOCK_PATH = Path("gold_cio_v9/experiments/preregistration_locks.yaml")
 
 
-def _experiment():
+def _experiment(experiment_id="EXP-0001"):
     raw = yaml.safe_load(LOCK_PATH.read_text(encoding="utf-8"))
-    return raw["experiments"]["EXP-0001"]
+    return raw["experiments"][experiment_id]
 
 
 def test_exp0001_preregistration_matches_locked_blob():
@@ -71,6 +71,25 @@ def test_exp0001_verdict_is_bound_to_gc():
     assert_instrument_scope(lock, "GC")
     with pytest.raises(PreregistrationPolicyError, match="VERDICT_TRANSFER_FORBIDDEN"):
         assert_instrument_scope(lock, "XAUUSD")
+
+
+def test_exp0001_closure_is_immutable_and_negative():
+    closure = _experiment()["closure"]
+    assert closure["status"] == "CLOSED_NONBINDING"
+    assert closure["verdict"] == "INSUFFICIENT_DATA"
+    assert closure["post_outcome_modification_allowed"] is False
+    assert git_blob_sha(closure["path"]) == closure["registered_blob_sha"]
+
+
+def test_exp0002_preregistration_matches_locked_blob_before_outcomes():
+    experiment = _experiment("EXP-0002")
+    assert experiment["status"] == "LOCKED_BEFORE_OUTCOMES"
+    assert experiment["outcomes_computed"] is False
+    assert experiment["post_outcome_modification_allowed"] is False
+    assert experiment["data_feasibility"]["status"] == "PENDING"
+    assert experiment["data_feasibility"]["outcome_computation_allowed"] is False
+    lock = load_lock(LOCK_PATH, "EXP-0002")
+    assert_preregistration_immutable(lock)
 
 
 def test_out_of_scope_instrument_is_rejected():

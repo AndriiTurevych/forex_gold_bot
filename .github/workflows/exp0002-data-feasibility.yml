@@ -1,0 +1,49 @@
+name: EXP-0002 Data Feasibility
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [gold-cio-v9]
+    paths:
+      - '.github/workflows/exp0002-data-feasibility.yml'
+      - 'scripts/probe_exp0002_massive_microstructure.py'
+      - 'gold_cio_v9/experiments/EXP-0002.yaml'
+      - 'gold_cio_v9/tests/test_exp0002_preregistration.py'
+
+permissions:
+  contents: read
+
+jobs:
+  probe-massive-microstructure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PYTHONPATH: .
+      MASSIVE_API_KEY: ${{ secrets.MASSIVE_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify secret gate
+        run: |
+          set -euo pipefail
+          test -n "$MASSIVE_API_KEY"
+          echo 'MASSIVE_API_KEY_PRESENT=true'
+      - name: Verify locked preregistration
+        run: |
+          set -euo pipefail
+          python -m pip install -q pytest pyyaml
+          python -m pytest -q gold_cio_v9/tests/test_exp0002_preregistration.py
+      - name: Probe historical trades and quotes entitlement
+        run: |
+          set -euo pipefail
+          python scripts/probe_exp0002_massive_microstructure.py | tee exp0002-data-feasibility.json
+      - name: Upload outcome-free feasibility evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: exp0002-data-feasibility-${{ github.sha }}
+          path: exp0002-data-feasibility.json
+          if-no-files-found: ignore
+          retention-days: 90

@@ -1,0 +1,48 @@
+{
+  "schema": "gold-cio-experiment-closure-v1",
+  "experiment_id": "EXP-0001",
+  "closed_at": "2026-09-06T17:02:18Z",
+  "status": "CLOSED_NONBINDING",
+  "verdict": "INSUFFICIENT_DATA",
+  "proven_alpha": false,
+  "binding": false,
+  "reason_nonbinding": "gold-cio-v9 branch was not protected at verdict time",
+  "git_commit": "1c3f3ff272020c46796e03d17f75c5591b360502",
+  "workflow_run_id": 34046586410,
+  "workflow_artifact_id": 9993490357,
+  "trial_id": "961c6a157436635a3b63",
+  "result_hash": "8f8bf06e5f21aeb60fadd8a4f74bbe72ce351eb58e3b270796059068c308a48c",
+  "dataset_hash": "1102d3d364056cea9760650d969185a3b2265b379e83c6c06723fe147e8ce848",
+  "bundle_hash": "0e2f1c7ec110b5982c7098d2308be7397fd133a9cb76545d7c686adb841e3ffb",
+  "lineage_hash": "d7b811651b48632993de6dbb2c7e2e89cf4018847173b2962bbbe899c858eb8f",
+  "macro_calendar_hash": "323f037024a83ed8367e06abd784ce8a19df428e43424de837167e04841b18e2",
+  "contract_master_hash": "6d1adb6691065716d45bc3f0f4041953f0f62b14425c4dc1a2a2fd59894f5af6",
+  "evidence": {
+    "bars": 484713,
+    "contracts": 9,
+    "primary_candidates": 216,
+    "raw_oos_setups": 43,
+    "minimum_required_oos_setups": 200,
+    "oos_expectancy_price": -5.32209302325584,
+    "oos_profit_factor": 0.38621429529300877,
+    "holdout_expectancy_price": -2.6840909090908944,
+    "cost_1_5x_expectancy_price": -5.4970930232558395
+  },
+  "failed_gates": [
+    "OOS_EXPECTANCY",
+    "OOS_PROFIT_FACTOR",
+    "RAW_OOS_SAMPLE",
+    "WALK_FORWARD_STABILITY",
+    "UNTOUCHED_HOLDOUT",
+    "DEFLATED_SHARPE",
+    "PBO",
+    "COST_STRESS_1_5X",
+    "TOP_TRADE_DEPENDENCE",
+    "CATASTROPHIC_REGIME"
+  ],
+  "governance": {
+    "parameter_rescue_allowed": false,
+    "reuse_as_proven_alpha_allowed": false,
+    "future_work_requires_new_experiment_id": true
+  }
+}
