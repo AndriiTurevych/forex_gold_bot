@@ -182,5 +182,11 @@ def parse_complete_massive_gc_session_pages(
             raise RuntimeError("normalized bar lost Massive session identity")
         event_day = bar.event_time.astimezone(timezone.utc).date()
         if not (session_date - timedelta(days=1) <= event_day <= session_date):
-            raise ValueError("bar timestamp is inconsistent with Massive session_end_date")
+            raise ValueError(
+                "bar timestamp is inconsistent with Massive session_end_date: "
+                f"contract={expected_contract} event_time={bar.event_time.isoformat()} "
+                f"event_day={event_day.isoformat()} "
+                f"session_end_date={session_date.isoformat()} "
+                f"calendar_day_delta={(event_day - session_date).days}"
+            )
     return tuple(bars)
