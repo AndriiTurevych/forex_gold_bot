@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import defaultdict
 from datetime import datetime, timedelta
 from hashlib import sha256
 import json
@@ -34,7 +35,7 @@ def load_bars(path: Path) -> tuple[HistoricalBar, ...]:
     return tuple(bars)
 
 
-def build_windows(bars: tuple[HistoricalBar, ...]) -> dict[str, object]:
+def _contract_windows(bars: tuple[HistoricalBar, ...]) -> list[dict[str, object]]:
     config = PipelineConfig(ATR_PERIOD, SWING_LEFT_BARS, SWING_RIGHT_BARS, 60)
     inputs = build_exp0001_causal_inputs(
         bars, atr_period=config.atr_period,
@@ -50,7 +51,7 @@ def build_windows(bars: tuple[HistoricalBar, ...]) -> dict[str, object]:
     )
     accepted = build_replay_candidates(list(setups))
     setup_by_id = {setup.setup_id: setup for setup in setups}
-    rows = []
+    rows: list[dict[str, object]] = []
     for candidate in accepted:
         setup = setup_by_id[candidate.candidate_id]
         end = setup.structure.event_time
@@ -62,6 +63,19 @@ def build_windows(bars: tuple[HistoricalBar, ...]) -> dict[str, object]:
             "flow_window_start": (end - timedelta(seconds=60)).isoformat(),
             "flow_window_end": end.isoformat(),
         })
+    return rows
+
+
+def build_windows(bars: tuple[HistoricalBar, ...]) -> dict[str, object]:
+    # Causal swing/day state must never cross a raw futures roll. Run each
+    # contract independently, then combine only the outcome-free window rows.
+    grouped: dict[str, list[HistoricalBar]] = defaultdict(list)
+    for bar in bars:
+        grouped[str(bar.contract)].append(bar)
+    rows = []
+    for contract in sorted(grouped):
+        rows.extend(_contract_windows(tuple(grouped[contract])))
+    rows.sort(key=lambda row: (row["structural_signal_time"], row["contract"], row["candidate_id"]))
     encoded = json.dumps(rows, sort_keys=True, separators=(",", ":")).encode()
     return {
         "schema": "gold-cio-exp0002-structural-windows-v1",
@@ -93,3 +107,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
