@@ -58,10 +58,23 @@ def _causal_trend_by_index(
         right_bars=swing_right_bars,
     )
     out: dict[int, str] = {}
+    swing_cursor = 0
+    highs = []
+    lows = []
     for i, bar in enumerate(bars):
-        visible = [s for s in swings if s.available_time <= bar.event_time]
-        highs = [s for s in visible if s.kind == "HIGH"]
-        lows = [s for s in visible if s.kind == "LOW"]
+        # Confirmed swings are ordered by availability. Retain only the two
+        # latest visible extrema of each kind because older points cannot affect
+        # the frozen trend rule.
+        while (
+            swing_cursor < len(swings)
+            and swings[swing_cursor].available_time <= bar.event_time
+        ):
+            swing = swings[swing_cursor]
+            bucket = highs if swing.kind == "HIGH" else lows
+            bucket.append(swing)
+            if len(bucket) > 2:
+                del bucket[0]
+            swing_cursor += 1
         if len(highs) < 2 or len(lows) < 2:
             continue
         h1, h2 = highs[-2], highs[-1]
