@@ -138,8 +138,10 @@ def parse_complete_massive_gc_session_pages(
     The caller should query Massive ``window_start`` from ``start_session_date-1``
     through ``end_session_date``. Rows from the one-day query padding are expected
     and are filtered solely by ``session_end_date``. Every raw row must still be the
-    requested outright contract, and every selected bar must start no earlier than
-    the calendar day immediately preceding its declared session end date.
+    requested outright contract. A regular session may start on the preceding UTC
+    day; an exchange-holiday session may start two UTC calendar days before its
+    declared session end date. Larger gaps and timestamps after the session date
+    fail closed.
     """
     if end_session_date < start_session_date:
         raise ValueError("end_session_date precedes start_session_date")
@@ -181,7 +183,7 @@ def parse_complete_massive_gc_session_pages(
         if session_date is None:
             raise RuntimeError("normalized bar lost Massive session identity")
         event_day = bar.event_time.astimezone(timezone.utc).date()
-        if not (session_date - timedelta(days=1) <= event_day <= session_date):
+        if not (session_date - timedelta(days=2) <= event_day <= session_date):
             raise ValueError(
                 "bar timestamp is inconsistent with Massive session_end_date: "
                 f"contract={expected_contract} event_time={bar.event_time.isoformat()} "
