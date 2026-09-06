@@ -1,5 +1,5 @@
 name: EXP-0001 Nonbinding Full Test
-# Acquisition validates regular and exchange-holiday GC session boundaries.
+# Acquisition validates regular and holiday/weekend GC session boundaries.
 
 on:
   workflow_dispatch:
