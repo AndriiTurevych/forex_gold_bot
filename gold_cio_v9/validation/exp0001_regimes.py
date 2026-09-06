@@ -70,7 +70,10 @@ def _volatility_label(signal_time: datetime, daily: Sequence[_DailyRange]) -> st
     day = signal_time.astimezone(timezone.utc).date()
     completed = [d for d in daily if d.day < day and d.true_range is not None]
     if len(completed) < VOL_LOOKBACK_DAYS + 1:
-        raise ValueError("insufficient completed-day history for locked volatility regime")
+        # Preserve early-contract candidates in the evaluation universe without
+        # borrowing history across a futures roll. Warmup is an explicit regime
+        # evidence state and remains subject to the same concentration/risk checks.
+        return "VOL_WARMUP"
     prior = completed[-1]
     history = completed[-(VOL_LOOKBACK_DAYS + 1):-1]
     base = median(d.true_range for d in history if d.true_range is not None)
