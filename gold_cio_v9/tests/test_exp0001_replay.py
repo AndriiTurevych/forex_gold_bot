@@ -44,6 +44,15 @@ def test_rejected_signal_is_skipped_not_repaired():
     assert build_replay_candidates([_setup(htf=False)]) == ()
 
 
+def test_nonpositive_risk_interval_is_skipped_not_repaired():
+    bad = _setup()
+    bad = ReplaySetup(**{
+        **bad.__dict__,
+        "sweep": TimedSweep(bad.sweep.event_time, Sweep("SSL", 103.0, 1.0)),
+    })
+    assert build_replay_candidates([bad]) == ()
+
+
 def test_duplicate_setup_id_fails_closed():
     with pytest.raises(ValueError, match="duplicate setup_id"):
         build_replay_candidates([_setup("dup", 10), _setup("dup", 20)])
