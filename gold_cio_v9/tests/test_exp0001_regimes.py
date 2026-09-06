@@ -67,8 +67,8 @@ def test_macro_outside_locked_window_is_no_macro_window():
     assert "NO_MACRO_WINDOW" in labels["c1"]
 
 
-def test_insufficient_volatility_history_fails_closed():
+def test_insufficient_volatility_history_is_explicit_warmup_regime():
     bars = _bars(days=10)
     signal = datetime(2025, 1, 10, 14, 0, tzinfo=timezone.utc)
-    with pytest.raises(ValueError, match="insufficient completed-day history"):
-        build_regime_labels(bars=bars, book=_book(signal), macro_events=())
+    labels = build_regime_labels(bars=bars, book=_book(signal), macro_events=())
+    assert "VOL_WARMUP" in labels["c1"]
