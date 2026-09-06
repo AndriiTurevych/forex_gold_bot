@@ -107,6 +107,9 @@ def build_causal_context(
     }
 
     out: list[CausalContext] = []
+    swing_cursor = 0
+    latest_high: ConfirmedSwing | None = None
+    latest_low: ConfirmedSwing | None = None
     for i, b in enumerate(bars):
         atr = None
         if i >= 1:
@@ -119,14 +122,24 @@ def build_causal_context(
             if atr <= 0:
                 raise ValueError("ATR must be positive")
 
-        visible = [s for s in swings if s.available_time <= b.event_time]
-        high = max((s for s in visible if s.kind == "HIGH"), key=lambda s: s.available_time, default=None)
-        low = max((s for s in visible if s.kind == "LOW"), key=lambda s: s.available_time, default=None)
+        # ``confirm_swings`` emits events in chronological availability order.
+        # Advance through each event once instead of rescanning the full swing
+        # history at every bar; the resulting latest visible state is identical.
+        while (
+            swing_cursor < len(swings)
+            and swings[swing_cursor].available_time <= b.event_time
+        ):
+            swing = swings[swing_cursor]
+            if swing.kind == "HIGH":
+                latest_high = swing
+            else:
+                latest_low = swing
+            swing_cursor += 1
         pd = previous_day.get(b.event_time.date())
         out.append(CausalContext(
             i, b.event_time, atr,
             pd[0] if pd else None,
             pd[1] if pd else None,
-            high, low,
+            latest_high, latest_low,
         ))
     return tuple(out)
