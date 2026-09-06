@@ -62,7 +62,12 @@ regimes:
     20 completed UTC-day true ranges for the same raw contract.
   volatility_high_min_ratio: 1.25
   volatility_low_max_ratio: 0.80
-  volatility_labels: [VOL_LOW, VOL_NORMAL, VOL_HIGH]
+  volatility_labels: [VOL_LOW, VOL_NORMAL, VOL_HIGH, VOL_WARMUP]
+  volatility_warmup_rule: >
+    Candidates with fewer than 21 completed same-contract UTC days retain full
+    membership in the statistical universe and receive VOL_WARMUP. History is
+    never borrowed across a futures roll and warmup candidates remain included
+    in regime concentration and catastrophic-regime checks.
   catastrophic_regime_min_resolved_oos: 30
   catastrophic_regime_rule: non_positive_expectancy
   low_n_negative_regime: INSUFFICIENT_DATA
