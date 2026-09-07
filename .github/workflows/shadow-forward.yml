@@ -2,7 +2,18 @@ name: Gold CIO Prospective Shadow
 
 on:
   workflow_dispatch:
+    inputs:
+      engine_ref:
+        description: Exact engine commit or branch for this manual run
+        required: false
+        default: gold-cio-v9
   workflow_call:
+    inputs:
+      engine_ref:
+        description: Exact immutable engine commit for scheduled runs
+        required: false
+        type: string
+        default: gold-cio-v9
   push:
     branches: [gold-cio-v9]
     paths:
@@ -33,8 +44,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: gold-cio-v9
+          ref: ${{ inputs.engine_ref || 'gold-cio-v9' }}
           fetch-depth: 1
+      - name: Verify immutable engine ref
+        env:
+          REQUESTED_ENGINE_REF: ${{ inputs.engine_ref }}
+        run: |
+          set -euo pipefail
+          ACTUAL_ENGINE_SHA="$(git rev-parse HEAD)"
+          if [[ "$REQUESTED_ENGINE_REF" =~ ^[0-9a-f]{40}$ ]] && [[ "$ACTUAL_ENGINE_SHA" != "$REQUESTED_ENGINE_REF" ]]; then
+            echo "ENGINE_SHA_MISMATCH expected=$REQUESTED_ENGINE_REF actual=$ACTUAL_ENGINE_SHA"
+            exit 1
+          fi
+          echo "ENGINE_SHA=$ACTUAL_ENGINE_SHA"
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
