@@ -1,0 +1,43 @@
+id: EXP-0003
+name: prospective_structural_shadow_v1
+status: LOCKED_BEFORE_OUTCOMES
+strategy_outcomes_generated: false
+hypothesis: >
+  Prospectively observed GC liquidity-sweep, MSS, FVG and retest sequences using
+  the frozen EXP-0001 structural implementation have positive 60-minute net
+  expectancy when accepted only from sufficiently fresh authoritative data.
+scope:
+  environment: SHADOW_ONLY
+  real_orders_allowed: false
+  evidence_start: first_cycle_after_preregistration_commit
+  historical_backfill_allowed: false
+data:
+  provider: Massive
+  resolution: 1min
+  lookback_calendar_days: 10
+  contract_universe: current_and_next_year_core_GC_months_GJMQVZ
+  front_selection: highest_volume_on_latest_completed_common_session
+  adjusted_continuous_prices_allowed: false
+signal:
+  structural_policy: EXP-0001-BASELINE-POLICY-V5
+  actions: [BUY, SELL, ABSTAIN]
+  maximum_feed_age_minutes: 20
+  maximum_candidate_age_minutes: 15
+  duplicate_signal_allowed: false
+  entry: latest_observed_close_at_decision
+outcomes:
+  horizons_minutes: [5, 15, 30, 60]
+  primary_horizon_minutes: 60
+  round_trip_cost_price: 0.35
+  append_only: true
+validation:
+  minimum_resolved_primary: 200
+  untouched_final_holdout_fraction: 0.20
+  profit_factor_minimum: 1.30
+  expectancy_must_be_positive: true
+  cost_stress_multiple: 1.50
+governance:
+  parameter_search_allowed: false
+  post_result_parameter_rescue_allowed: false
+  formal_verdict_before_minimum_sample_allowed: false
+  live_promotion_from_this_experiment_allowed: false

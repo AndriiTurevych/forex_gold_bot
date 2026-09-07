@@ -102,3 +102,13 @@ def test_out_of_scope_instrument_is_rejected():
     lock = load_lock(LOCK_PATH, "EXP-0001")
     with pytest.raises(PreregistrationPolicyError, match="INSTRUMENT_OUT_OF_SCOPE"):
         assert_instrument_scope(lock, "SI")
+
+
+def test_exp0003_prospective_shadow_lock_is_immutable_and_non_live():
+    experiment = _experiment("EXP-0003")
+    assert experiment["status"] == "LOCKED_BEFORE_OUTCOMES"
+    assert experiment["environment"] == "SHADOW_ONLY"
+    assert experiment["real_orders_allowed"] is False
+    assert experiment["outcomes_computed"] is False
+    assert experiment["post_outcome_modification_allowed"] is False
+    assert_preregistration_immutable(load_lock(LOCK_PATH, "EXP-0003"))

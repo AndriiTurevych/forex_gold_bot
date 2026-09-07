@@ -1,0 +1,91 @@
+name: Gold CIO Prospective Shadow
+
+on:
+  workflow_dispatch:
+  workflow_call:
+  push:
+    branches: [gold-cio-v9]
+    paths:
+      - '.github/workflows/shadow-forward.yml'
+      - 'gold_cio_v9/shadow/**'
+      - 'gold_cio_v9/experiments/EXP-0003.yaml'
+      - 'scripts/acquire_shadow_massive.py'
+      - 'scripts/restore_shadow_ledger.py'
+      - 'scripts/run_shadow_cycle.py'
+      - 'gold_cio_v9/tests/test_shadow_system.py'
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: gold-cio-prospective-shadow
+  cancel-in-progress: false
+
+jobs:
+  shadow-cycle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PYTHONPATH: .
+      MASSIVE_API_KEY: ${{ secrets.MASSIVE_API_KEY }}
+      LIVE_ORDER_ALLOWED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: gold-cio-v9
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify shadow code and hard live-order veto
+        run: |
+          set -euo pipefail
+          test "$LIVE_ORDER_ALLOWED" = 'false'
+          python -m pip install -q pytest pyyaml numpy
+          python -m pytest -q gold_cio_v9/tests/test_shadow_system.py
+          mkdir -p shadow_artifacts
+      - name: Restore latest verified ledger artifact
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python scripts/restore_shadow_ledger.py --output shadow_artifacts/shadow_ledger.jsonl
+          python - <<'PY'
+          from gold_cio_v9.shadow.ledger import HashChainLedger
+          rows=HashChainLedger('shadow_artifacts/shadow_ledger.jsonl').read_verified()
+          print(f'RESTORED_LEDGER_RECORDS={len(rows)}')
+          PY
+      - name: Acquire current causal GC front
+        run: |
+          set -euo pipefail
+          python scripts/acquire_shadow_massive.py --output-dir shadow_artifacts
+      - name: Run one prospective shadow cycle
+        run: |
+          set -euo pipefail
+          ENGINE_SHA="$(git rev-parse HEAD)"
+          python scripts/run_shadow_cycle.py \
+            --bars shadow_artifacts/bars.jsonl \
+            --acquisition shadow_artifacts/acquisition.json \
+            --ledger shadow_artifacts/shadow_ledger.jsonl \
+            --summary shadow_artifacts/shadow_summary.json \
+            --git-commit "$ENGINE_SHA"
+      - name: Verify ledger after cycle
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from gold_cio_v9.shadow.ledger import HashChainLedger
+          rows=HashChainLedger('shadow_artifacts/shadow_ledger.jsonl').read_verified()
+          assert rows and rows[-1]['event_type']=='DECISION'
+          assert rows[-1]['payload']['execution_allowed'] is False
+          assert rows[-1]['payload']['live_order_attempted'] is False
+          print(f'LEDGER_TIP={rows[-1]["record_hash"]}')
+          PY
+      - name: Upload immutable shadow cycle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gold-cio-shadow-ledger
+          path: shadow_artifacts/
+          if-no-files-found: warn
+          retention-days: 90

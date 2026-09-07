@@ -87,3 +87,14 @@ experiments:
       registered_blob_sha: cdc60c46ac29a576ce7ebc26bedc1c99ab4b9faf
       status: SEALED_OUTCOME_FREE
       formal_verdict_allowed: false
+  EXP-0003:
+    path: gold_cio_v9/experiments/EXP-0003.yaml
+    registered_blob_sha: c8468763ebcf1c88d830cdf1966ff0f0d3b0a5a0
+    status: LOCKED_BEFORE_OUTCOMES
+    primary_instrument: GC
+    secondary_instrument: null
+    verdict_transfer_allowed: false
+    environment: SHADOW_ONLY
+    real_orders_allowed: false
+    outcomes_computed: false
+    post_outcome_modification_allowed: false
