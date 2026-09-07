@@ -117,3 +117,12 @@ experiments:
       restored_ledger_records: 1
       appended_ledger_sequence: 2
       real_orders_allowed: false
+    data_recency:
+      path: gold_cio_v9/experiments/EXP-0003-DATA-RECENCY.json
+      registered_blob_sha: 07f8063d6efcb50c4e5d14e59daa84cf88a14c00
+      status: BLOCKED_ENTITLEMENT_RECENCY
+      observed_workflow_run_id: 34080288083
+      locked_maximum_feed_age_minutes: 20
+      minimum_compatible_tier: MASSIVE_FUTURES_STARTER
+      parameter_relaxation_allowed: false
+      formal_verdict_allowed: false
