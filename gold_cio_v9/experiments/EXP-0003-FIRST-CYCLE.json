@@ -1,0 +1,37 @@
+{
+  "schema": "gold-cio-exp0003-first-cycle-record-v1",
+  "experiment_id": "EXP-0003",
+  "scope": "PROSPECTIVE_SHADOW_ONLY",
+  "preregistration_commit": "01542f3090fddae49f34b2d13cd759294127d6a1",
+  "engine_commit": "566486534a8b3d186f56b834d27cc79300ac42b1",
+  "workflow_run_id": 34070856433,
+  "workflow_job_id": 101587798332,
+  "workflow_artifact_id": 10000426384,
+  "artifact_sha256": "0ad51486ae2d423b8390c5e3e927fecc77a2e5481095f7daa082a86f00ed1db8",
+  "scheduled_dispatcher_commit": "1509df712fba45f39ff0dfdeef90b2accf4565c5",
+  "acquisition": {
+    "acquired_at": "2026-09-07T00:46:25.280904+00:00",
+    "provider": "Massive",
+    "contract": "GCZ6",
+    "front_selection_session": "2026-09-04",
+    "front_selection_volume": 171167.0,
+    "bars": 8112,
+    "latest_bar_close_time": "2026-09-04T21:00:00+00:00",
+    "latest_price": 4477.2,
+    "feed_age_minutes": 3106.4213484,
+    "data_snapshot_hash": "694c51d02496ae26c43a9dfb7b714375b12fadb27b2aa8bd76c47e2b1488c929"
+  },
+  "decision": {
+    "action": "ABSTAIN",
+    "reason": "STALE_DATA_VETO",
+    "ledger_sequence": 1,
+    "ledger_tip_hash": "3b5c73ab1f3b191d4555a507ae093cb1ba4460a28801197b507324993ea93625",
+    "execution_allowed": false,
+    "live_order_attempted": false,
+    "real_orders_enabled": false
+  },
+  "settled_outcomes": 0,
+  "strategy_outcomes_generated": false,
+  "formal_verdict_allowed": false,
+  "proven_alpha": false
+}
