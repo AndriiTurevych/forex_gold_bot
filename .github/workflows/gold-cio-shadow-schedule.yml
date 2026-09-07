@@ -1,0 +1,15 @@
+name: Gold CIO Shadow Scheduler
+
+on:
+  schedule:
+    - cron: "*/15 * * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  shadow:
+    uses: AndriiTurevych/forex_gold_bot/.github/workflows/shadow-forward.yml@gold-cio-v9
+    secrets: inherit
