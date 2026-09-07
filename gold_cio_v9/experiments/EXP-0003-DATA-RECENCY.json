@@ -1,0 +1,41 @@
+{
+  "schema": "gold-cio-exp0003-data-recency-record-v1",
+  "experiment_id": "EXP-0003",
+  "status": "BLOCKED_ENTITLEMENT_RECENCY",
+  "recorded_at": "2026-09-07T03:40:00Z",
+  "locked_maximum_feed_age_minutes": 20,
+  "observed": {
+    "workflow_run_id": 34080288083,
+    "engine_commit": "dba8d72316491731df418f78960c2c79ef214b02",
+    "provider": "Massive",
+    "contract": "GCZ6",
+    "acquired_at": "2026-09-07T03:37:55.369405+00:00",
+    "latest_bar_close_time": "2026-09-04T21:00:00+00:00",
+    "feed_age_minutes": 3277.9228234166667,
+    "decision": "ABSTAIN",
+    "reason": "STALE_DATA_VETO"
+  },
+  "provider_documentation": {
+    "aggregate_endpoint": "https://massive.com/docs/rest/futures/aggregates",
+    "basic_recency_minutes": 480,
+    "starter_recency_minutes": 10,
+    "developer_recency_minutes": 10,
+    "advanced_recency": "REAL_TIME",
+    "basic_rate_limit_observed_compatible": "5_REQUESTS_PER_MINUTE"
+  },
+  "determination": {
+    "account_tier_inference": "BASIC_OR_EQUIVALENT",
+    "inference_basis": [
+      "observed five-requests-per-minute rate behavior",
+      "observed inaccessible current-session bars",
+      "official Futures Basic eight-hour recency"
+    ],
+    "basic_compatible_with_exp0003": false,
+    "starter_or_better_recency_required": true,
+    "parameter_relaxation_allowed": false,
+    "reason": "Relaxing the 20-minute lock would make an intraday entry non-causal and invalid"
+  },
+  "strategy_outcomes_generated": false,
+  "formal_verdict_allowed": false,
+  "real_orders_allowed": false
+}
