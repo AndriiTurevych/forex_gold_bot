@@ -7,7 +7,8 @@ from io import BytesIO
 import json
 import os
 from pathlib import Path
-from urllib.request import Request, urlopen
+from urllib.error import HTTPError
+from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 from zipfile import ZipFile
 
 
@@ -33,7 +34,20 @@ def main() -> int:
         print(json.dumps({"restored": False, "reason": "GENESIS"}))
         return 0
     artifact = max(usable, key=lambda a: (a.get("created_at", ""), int(a["id"])))
-    with urlopen(Request(artifact["archive_download_url"], headers=headers), timeout=60) as response:
+    class _NoRedirect(HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, response_headers, newurl):
+            return None
+
+    try:
+        response = build_opener(_NoRedirect).open(
+            Request(artifact["archive_download_url"], headers=headers), timeout=60
+        )
+    except HTTPError as exc:
+        if exc.code not in (301, 302, 303, 307, 308) or not exc.headers.get("Location"):
+            raise
+        # The signed object-store URL must not receive the GitHub bearer token.
+        response = urlopen(exc.headers["Location"], timeout=60)
+    with response:
         archive = response.read()
     with ZipFile(BytesIO(archive)) as bundle:
         names = [n for n in bundle.namelist() if n.endswith("shadow_ledger.jsonl") and ".." not in Path(n).parts]
