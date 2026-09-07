@@ -28,10 +28,19 @@ def candidate_tickers(now: datetime) -> tuple[str, ...]:
 
 
 class Massive:
+    MIN_REQUEST_INTERVAL_SECONDS = 13.0
+
     def __init__(self, key: str):
         if not key.strip():
             raise ValueError("MASSIVE_API_KEY is required")
         self.key = key.strip()
+        self._last_request_at = 0.0
+
+    def _pace(self) -> None:
+        elapsed = time.monotonic() - self._last_request_at
+        if elapsed < self.MIN_REQUEST_INTERVAL_SECONDS:
+            time.sleep(self.MIN_REQUEST_INTERVAL_SECONDS - elapsed)
+        self._last_request_at = time.monotonic()
 
     def get(self, target: str, params: dict[str, object]) -> dict:
         parsed = urlparse(target if target.startswith("https://") else BASE + target)
@@ -42,6 +51,7 @@ class Massive:
         query["apiKey"] = self.key
         url = urlunparse(parsed._replace(query=urlencode(query)))
         for attempt in range(6):
+            self._pace()
             try:
                 with urlopen(Request(url, headers={"User-Agent": "Gold-CIO-Shadow/1.0"}), timeout=60) as response:
                     payload = json.load(response)
@@ -51,6 +61,10 @@ class Massive:
             except HTTPError as exc:
                 if exc.code not in (429, 500, 502, 503, 504) or attempt == 5:
                     raise
+                retry_after = exc.headers.get("Retry-After") if exc.headers else None
+                if exc.code == 429:
+                    time.sleep(float(retry_after) if retry_after and retry_after.isdigit() else 60.0)
+                    continue
             except URLError:
                 if attempt == 5:
                     raise
@@ -146,3 +160,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
