@@ -126,3 +126,13 @@ experiments:
       minimum_compatible_tier: MASSIVE_FUTURES_STARTER
       parameter_relaxation_allowed: false
       formal_verdict_allowed: false
+    implementation_lock:
+      path: gold_cio_v9/experiments/EXP-0003-IMPLEMENTATION-LOCK.json
+      registered_blob_sha: 9edebb61ce23cfe0ea63a45b512e8f7fe5c60714
+      status: LOCKED_BEFORE_STRATEGY_OUTCOMES
+      engine_commit: dba8d72316491731df418f78960c2c79ef214b02
+      dispatcher_commit: 9a5452ed029f1248c813e7dc5902a9a8b199e7d4
+      validation_workflow_run_id: 34080301868
+      validation_artifact_id: 10003519843
+      post_lock_engine_change_allowed: false
+      formal_verdict_allowed: false
