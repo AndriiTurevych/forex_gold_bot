@@ -108,3 +108,12 @@ experiments:
       reason: STALE_DATA_VETO
       real_orders_allowed: false
       formal_verdict_allowed: false
+    scheduler_validation:
+      path: gold_cio_v9/experiments/EXP-0003-SCHEDULER-VALIDATION.json
+      registered_blob_sha: df10a441ab3362f13bfbdf19da1bf7f48c8ef1fb
+      status: SEALED_INTEGRATION_SUCCESS
+      workflow_run_id: 34071048764
+      workflow_artifact_id: 10000487524
+      restored_ledger_records: 1
+      appended_ledger_sequence: 2
+      real_orders_allowed: false
