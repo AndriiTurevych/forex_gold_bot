@@ -16,5 +16,7 @@ permissions:
 
 jobs:
   shadow:
-    uses: AndriiTurevych/forex_gold_bot/.github/workflows/shadow-forward.yml@gold-cio-v9
+    uses: AndriiTurevych/forex_gold_bot/.github/workflows/shadow-forward.yml@dba8d72316491731df418f78960c2c79ef214b02
+    with:
+      engine_ref: dba8d72316491731df418f78960c2c79ef214b02
     secrets: inherit
