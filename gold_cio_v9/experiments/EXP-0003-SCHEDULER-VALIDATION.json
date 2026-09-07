@@ -1,0 +1,22 @@
+{
+  "schema": "gold-cio-exp0003-scheduler-validation-v1",
+  "experiment_id": "EXP-0003",
+  "scope": "SCHEDULED_DISPATCHER_INTEGRATION",
+  "dispatcher_commit": "95e804ab7d529ea1cdad7edee6ab86d9b52b76d8",
+  "workflow_run_id": 34071048764,
+  "workflow_job_id": 101588334396,
+  "workflow_conclusion": "SUCCESS",
+  "restored_artifact_id": 10000426384,
+  "restored_ledger_records": 1,
+  "uploaded_artifact_id": 10000487524,
+  "uploaded_artifact_sha256": "af54067b41f5f62cdea238467e5de2012c6cab71961a98811c196485069d9284",
+  "appended_ledger_sequence": 2,
+  "ledger_tip_hash": "68b300f5b14f26c952dfe5e6f644392106fd8bf8b5d0c01f0c718f7b4b381612",
+  "action": "ABSTAIN",
+  "reason": "STALE_DATA_VETO",
+  "contract_selected": "GCZ6",
+  "execution_allowed": false,
+  "live_order_attempted": false,
+  "strategy_outcomes_generated": false,
+  "formal_verdict_allowed": false
+}
