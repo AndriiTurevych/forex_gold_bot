@@ -76,7 +76,7 @@ def pending_contracts(ledger: HashChainLedger) -> set[str]:
 def record_decision(*, ledger: HashChainLedger, candidate: dict | None,
                     bars, front_contract: str, received_at: datetime,
                     decision_at: datetime, snapshot_hash: str,
-                    engine_commit: str, candidate_hash: str, commit_clock=None) -> dict:
+                    engine_commit: str, candidate_hash: str, commit_clock=None, veto_reason=None) -> dict:
     received_at, decision_at = utc(received_at), utc(decision_at)
     rows = verified_rows(ledger)
     if decision_at < received_at:
@@ -117,6 +117,8 @@ def record_decision(*, ledger: HashChainLedger, candidate: dict | None,
             action = "BUY" if candidate["direction"] == "LONG" else "SELL"
             reason = "PAPER_FILL_PENDING"
     committed_at = utc(commit_clock()) if commit_clock else decision_at
+    if veto_reason:
+        action, reason = "ABSTAIN", veto_reason
     if committed_at < decision_at:
         raise ValueError("CLOCK_MOVED_BACKWARD")
     if action != "ABSTAIN" and committed_at >= next_minute(decision_at):
