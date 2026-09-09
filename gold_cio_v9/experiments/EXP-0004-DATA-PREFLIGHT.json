@@ -1,0 +1,19 @@
+{
+  "experiment_id": "EXP-0004",
+  "status": "BLOCKED_STALE_FEED",
+  "data_ready": false,
+  "observed_at": "2026-09-09T10:55:35.292905+00:00",
+  "contract": "GCZ6",
+  "bars": 9792,
+  "latest_bar_close_time": "2026-09-09T02:56:00+00:00",
+  "feed_age_minutes": 479.5943726833333,
+  "maximum_feed_age_minutes": 20,
+  "account_tier": "NOT_VERIFIED",
+  "outcomes_computed": false,
+  "workflow_run_id": 34342647327,
+  "workflow_artifact_id": 10100432447,
+  "raw_hash": "b497ee4e46ca3c590207c2c664d2427929d8e4d9afb2422df94d1c8dbb9a1c83",
+  "snapshot_hash": "95cc42510ee0f125996f3b099abdad3e41a19689a96e30a9dc35277f4a9ca8c0",
+  "activation_allowed": false,
+  "real_orders_allowed": false
+}
