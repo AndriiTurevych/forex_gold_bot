@@ -1,0 +1,24 @@
+{
+  "experiment_id": "EXP-0004",
+  "status": "IMPLEMENTATION_SEALED_ACTIVATION_BLOCKED",
+  "engine_commit": "497592006fe9db74df254ad7e3bbdb54353f1e39",
+  "tested_pr_head": "cdbd07f5490131621f037c3247b885eddd353845",
+  "protocol_hash": "c68a225be30b7acf21fbd3678cedab2d2277caa1f4e9c09905c04f06d69af08d",
+  "test_count": 392,
+  "ci_run_id": 34343305834,
+  "trust_gate_run_id": 34343305755,
+  "causal_qa_run_id": 34343305897,
+  "evidence_run_id": 34342647327,
+  "evidence_artifact_id": 10100432447,
+  "data_ready": false,
+  "prospective_started": false,
+  "checkpoint_verifier_ready": true,
+  "durable_checkpoint_scheduler_integration_verified": false,
+  "formal_verdict_allowed": false,
+  "real_orders_allowed": false,
+  "blockers": [
+    "OBSERVED_FEED_DELAY_479_6_MINUTES_EXCEEDS_20",
+    "DURABLE_EXTERNAL_CHECKPOINT_AND_SCHEDULER_REQUIRE_INTEGRATION_VALIDATION"
+  ],
+  "post_outcome_engine_changes_allowed": false
+}
