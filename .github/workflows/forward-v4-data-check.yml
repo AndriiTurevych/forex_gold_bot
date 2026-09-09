@@ -1,10 +1,16 @@
 name: EXP-0004 Real Data Preflight
 on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 13 * * 1-5'
   pull_request:
     branches: [gold-cio-v9]
     paths: ['.github/workflows/forward-v4-data-check.yml']
 permissions:
   contents: read
+concurrency:
+  group: exp0004-data-readiness
+  cancel-in-progress: true
 jobs:
   real-data:
     runs-on: ubuntu-24.04
@@ -37,6 +43,8 @@ jobs:
           result={**meta,'latest_bar_close_time':latest.isoformat(),'feed_age_minutes':age,'data_ready':0<=age<=20,'outcomes_computed':False,'account_tier':'NOT_VERIFIED'}
           (out/'preflight.json').write_text(json.dumps(result,indent=2,sort_keys=True))
           print(json.dumps(result,sort_keys=True))
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as summary:
+              summary.write(f"## EXP-0004 data readiness\n\n- Contract: {result['contract']}\n- Feed age: {age:.1f} minutes\n- Required: <= 20 minutes\n- DATA_READY: {str(result['data_ready']).lower()}\n- Outcomes computed: false\n")
           PY
       - uses: actions/upload-artifact@v4
         if: always()
@@ -44,4 +52,3 @@ jobs:
           name: exp0004-real-data-preflight
           path: preflight/
           retention-days: 90
-
