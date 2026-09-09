@@ -19,6 +19,9 @@ from gold_cio_v9.forward_v4 import (
 from gold_cio_v9.shadow.ledger import HashChainLedger
 from scripts.acquire_shadow_massive import Massive, select_front
 from scripts.build_exp0002_structural_windows import build_windows, load_bars
+from gold_cio_v9.forward_v4_validation import (
+    admission_reason, checkpoint, evaluate, policy_hash, verify_checkpoint,
+)
 
 
 def collect(api, ledger: HashChainLedger, now: datetime, output: Path, clock=None) -> dict:
@@ -90,12 +93,17 @@ def run_cycle(*, ledger, bars_path, metadata, engine_commit, clock=None):
     # Sample actual wall clock AFTER feature extraction and prior settlement.
     decision_at = utc(clock())
     latest = structural["candidates"][-1] if structural["candidates"] else None
+    history = ledger.read_verified()
+    genesis = history[0]["payload"] if history else {}
+    registered = genesis.get("scope") == "PROSPECTIVE_NONBINDING"
+    veto = admission_reason(genesis["start_time"], decision_at) if registered else None
     record = record_decision(
         ledger=ledger, candidate=latest, bars=bars, front_contract=metadata["contract"],
         received_at=received, decision_at=decision_at, snapshot_hash=metadata["snapshot_hash"],
         engine_commit=engine_commit, candidate_hash=structural["candidate_windows_hash"], commit_clock=clock,
+        veto_reason=veto,
     )
-    return {"experiment_id": EXPERIMENT, "scope": "ENGINEERING_ONLY",
+    return {"experiment_id": EXPERIMENT, "scope": "PROSPECTIVE_NONBINDING" if registered else "ENGINEERING_ONLY",
             "action": record["payload"]["action"], "reason": record["payload"]["reason"],
             "settlement_records": appended, "ledger_sequence": record["seq"],
             "ledger_tip": record["record_hash"], "formal_verdict_allowed": False,
@@ -108,22 +116,47 @@ def main():
     parser.add_argument("--ledger", required=True)
     parser.add_argument("--engine-commit", required=True)
     parser.add_argument("--initialize", action="store_true")
+    parser.add_argument("--implementation-lock")
+    parser.add_argument("--expected-checkpoint")
     args = parser.parse_args()
     if os.environ.get("LIVE_ORDER_ALLOWED", "false").lower() != "false":
         raise RuntimeError("LIVE_ORDERS_FORBIDDEN")
     ledger = HashChainLedger(args.ledger)
+    lock = json.loads(Path(args.implementation_lock).read_text()) if args.implementation_lock else None
+    if lock is not None:
+        if (lock.get("engine_commit") != args.engine_commit or lock.get("protocol_hash") != policy_hash()
+                or lock.get("data_ready") is not True or not lock.get("evidence_run_id")):
+            raise ValueError("IMPLEMENTATION_LOCK_OR_DATA_NOT_READY")
     if args.initialize:
         ledger.path.parent.mkdir(parents=True, exist_ok=True)
         with ledger.path.open("x"):
             pass  # Exclusive create: never erase an existing ledger.
-        ledger.append("GENESIS", {"experiment_id": EXPERIMENT, "scope": "ENGINEERING_ONLY"})
+        ledger.append("GENESIS", {"experiment_id": EXPERIMENT,
+                                 "scope": "PROSPECTIVE_NONBINDING" if lock else "ENGINEERING_ONLY",
+                                 "engine_commit": args.engine_commit, "protocol_hash": policy_hash(),
+                                 "start_time": datetime.now(timezone.utc).isoformat()})
     elif not ledger.path.exists() or not ledger.read_verified():
         raise ValueError("MISSING_LEDGER_EXPLICIT_INITIALIZATION_REQUIRED")
+    genesis = ledger.read_verified()[0]["payload"]
+    if genesis.get("scope") == "PROSPECTIVE_NONBINDING":
+        if lock is None or genesis.get("engine_commit") != args.engine_commit or genesis.get("protocol_hash") != policy_hash():
+            raise ValueError("REGISTERED_ENGINE_LOCK_REQUIRED")
+        if not args.initialize:
+            if not args.expected_checkpoint:
+                raise ValueError("EXTERNAL_CHECKPOINT_REQUIRED")
+            verify_checkpoint(ledger, json.loads(Path(args.expected_checkpoint).read_text()), args.engine_commit)
+    elif lock:
+        raise ValueError("ENGINEERING_LEDGER_CANNOT_BE_PROMOTED")
     output = Path(args.output_dir)
     metadata = collect(Massive(os.environ.get("MASSIVE_API_KEY", "")), ledger,
                        datetime.now(timezone.utc), output)
     summary = run_cycle(ledger=ledger, bars_path=output / "bars.jsonl", metadata=metadata,
                         engine_commit=args.engine_commit)
+    anchor = checkpoint(ledger, args.engine_commit)
+    (output / "checkpoint.json").write_text(json.dumps(anchor, sort_keys=True, indent=2))
+    if lock:
+        summary["evaluation"] = evaluate(ledger, now=datetime.now(timezone.utc),
+                                         expected_checkpoint=anchor, engine_commit=args.engine_commit)
     (output / "summary.json").write_text(json.dumps(summary, sort_keys=True, indent=2))
     print(json.dumps(summary, sort_keys=True))
 
