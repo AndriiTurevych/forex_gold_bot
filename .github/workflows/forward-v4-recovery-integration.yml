@@ -1,0 +1,105 @@
+name: EXP-0004 Recovery Integration
+on:
+  pull_request:
+    branches: [gold-cio-v9]
+    paths:
+      - '.github/workflows/forward-v4-recovery-integration.yml'
+      - 'gold_cio_v9/forward_v4_recovery.py'
+      - 'gold_cio_v9/tests/test_forward_v4_recovery.py'
+permissions:
+  contents: read
+env:
+  PYTHONPATH: .
+  TEST_ENGINE: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+jobs:
+  generation-one:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Create first separately anchored generation
+        run: |
+          python - <<'PY'
+          from datetime import datetime, timezone
+          from pathlib import Path
+          from zipfile import ZipFile
+          import os
+          from gold_cio_v9.forward_v4_recovery import build_anchor, write_anchor
+          from gold_cio_v9.forward_v4_validation import policy_hash
+          from gold_cio_v9.shadow.ledger import HashChainLedger
+          out=Path('generation-one'); out.mkdir()
+          ledger=HashChainLedger(out/'exp0004_ledger.jsonl')
+          ledger.append('GENESIS', {'experiment_id':'EXP-0004','scope':'PROSPECTIVE_NONBINDING',
+            'engine_commit':os.environ['TEST_ENGINE'],'protocol_hash':policy_hash(),
+            'start_time':datetime(2026,9,10,tzinfo=timezone.utc).isoformat()})
+          ledger.append('HEARTBEAT', {'experiment_id':'EXP-0004','generation':1})
+          anchor=build_anchor(ledger,artifact_id=1001,engine_commit=os.environ['TEST_ENGINE'])
+          write_anchor(out/'anchor.json',anchor,exclusive=True)
+          with ZipFile(out/'ledger.zip','w') as z: z.write(ledger.path,'exp0004_ledger.jsonl')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exp0004-recovery-generation-one
+          path: generation-one/
+          retention-days: 1
+  generation-two:
+    needs: generation-one
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: exp0004-recovery-generation-one
+          path: previous
+      - name: Restore exact first generation and advance it
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+          import os
+          from gold_cio_v9.forward_v4_recovery import build_anchor, read_anchor, restore_exact_archive, write_anchor
+          prior=read_anchor('previous/anchor.json')
+          out=Path('generation-two'); out.mkdir()
+          ledger=restore_exact_archive('previous/ledger.zip',out/'exp0004_ledger.jsonl',prior,os.environ['TEST_ENGINE'])
+          ledger.append('HEARTBEAT',{'experiment_id':'EXP-0004','generation':2})
+          anchor=build_anchor(ledger,artifact_id=1002,engine_commit=os.environ['TEST_ENGINE'],previous=prior)
+          write_anchor(out/'anchor.json',anchor,exclusive=True)
+          with ZipFile(out/'ledger.zip','w') as z: z.write(ledger.path,'exp0004_ledger.jsonl')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exp0004-recovery-generation-two
+          path: generation-two/
+          retention-days: 1
+  verify-independent-generations:
+    needs: generation-two
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: exp0004-recovery-generation-*
+          path: evidence
+      - name: Verify both anchors and monotonic extension after cross-job restore
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import os
+          from gold_cio_v9.forward_v4_recovery import read_anchor, restore_exact_archive
+          a=read_anchor('evidence/exp0004-recovery-generation-one/anchor.json')
+          b=read_anchor('evidence/exp0004-recovery-generation-two/anchor.json')
+          restore_exact_archive('evidence/exp0004-recovery-generation-one/ledger.zip','restored-one.jsonl',a,os.environ['TEST_ENGINE'])
+          restore_exact_archive('evidence/exp0004-recovery-generation-two/ledger.zip','restored-two.jsonl',b,os.environ['TEST_ENGINE'])
+          assert b.generation == a.generation + 1
+          assert b.sequence > a.sequence
+          assert b.artifact_id != a.artifact_id
+          print(f'RECOVERY_INTEGRATION_OK generation={b.generation} sequence={b.sequence}')
+          PY
