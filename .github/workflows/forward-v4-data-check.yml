@@ -1,0 +1,47 @@
+name: EXP-0004 Real Data Preflight
+on:
+  pull_request:
+    branches: [gold-cio-v9]
+    paths: ['.github/workflows/forward-v4-data-check.yml']
+permissions:
+  contents: read
+jobs:
+  real-data:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PYTHONPATH: .
+      MASSIVE_API_KEY: ${{ secrets.MASSIVE_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install numpy pyyaml
+      - name: Acquire and measure real feed without strategy outcomes
+        run: |
+          python - <<'PY'
+          from datetime import datetime, timezone, timedelta
+          from pathlib import Path
+          import json, os
+          from scripts.forward_v4_cycle import collect
+          from scripts.acquire_shadow_massive import Massive
+          from scripts.build_exp0002_structural_windows import load_bars
+          from gold_cio_v9.shadow.ledger import HashChainLedger
+          out=Path('preflight')
+          out.mkdir()
+          meta=collect(Massive(os.environ.get('MASSIVE_API_KEY','')), HashChainLedger(out/'empty.jsonl'), datetime.now(timezone.utc), out)
+          bars=load_bars(out/'bars.jsonl')
+          latest=max(b.event_time for b in bars if b.contract==meta['contract'])+timedelta(minutes=1)
+          age=(datetime.now(timezone.utc)-latest).total_seconds()/60
+          result={**meta,'latest_bar_close_time':latest.isoformat(),'feed_age_minutes':age,'data_ready':0<=age<=20,'outcomes_computed':False,'account_tier':'NOT_VERIFIED'}
+          (out/'preflight.json').write_text(json.dumps(result,indent=2,sort_keys=True))
+          print(json.dumps(result,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: exp0004-real-data-preflight
+          path: preflight/
+          retention-days: 90
+
