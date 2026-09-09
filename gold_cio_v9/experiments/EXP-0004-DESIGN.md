@@ -1,6 +1,8 @@
 # EXP-0004 — causal paper execution candidate
 
-Status: **ENGINEERING_ONLY; not preregistered; formal verdict forbidden.**
+Status: **IMPLEMENTED_NONBINDING_RESEARCH; ACTIVATION_BLOCKED_STALE_FEED.**
+
+No prospective sample has started. Formal/live-trading verdicts remain forbidden.
 
 This change fixes the mechanics found in the EXP-0003 audit. It preserves the
 structural sweep/MSS/FVG/retest hypothesis and does not change, reopen, or merge
@@ -33,28 +35,40 @@ latency. Bars with no trades are missing observations, not permission to invent
 a fill. Primary and secondary horizons must not become four opportunities to
 select whichever result looks best.
 
-## Required before a prospective statistical launch
+## Validation and activation status — 2026-09-09
 
-1. Freeze an executable validation policy and its code hash before collecting
-   research outcomes: one primary 60-minute endpoint, sample/deadline stopping,
-   missing-data handling, effect-size requirement and dependence-aware inference.
-   A count of 200 alone is not a statistical acceptance criterion.
-2. Fix a chronological holdout and prohibit tuning or repeated acceptance checks
-   against it. Decide the calendar stopping date and allocation before launch;
-   this engineering change does not invent an achieved sample or lock arbitrary
-   numbers after looking at outcomes.
-3. Seal the complete implementation manifest, including imported structural,
-   provider, and ledger dependencies. Put independent run/tip anchors outside the
-   mutable ledger and require a trusted expected tip during recovery. Hash-chain
-   consistency alone cannot detect a complete rewrite or prefix truncation.
-4. Run a real-data, outcome-free acquisition/latency check and establish observed
-   feed recency. Existing HTTP access and stale bars do not establish a paid tier.
-5. Activate a separate pinned scheduler/artifact stream only after those gates.
-   The existing EXP-0003 scheduler is not changed by this candidate PR.
+The executable protocol is `EXP-0004-PROTOCOL.json`. It fixes a 180-day calendar
+from explicit prospective genesis: 90 days development, then 90 days untouched
+holdout, with a 61-minute boundary embargo. Each partition requires at least
+100 complete primary observations and 40 active days. These are minimum coverage
+requirements, not a power calculation or promise of statistical significance.
 
-Until then, the runnable CLI is explicitly an **engineering dry run**, not a
-preregistered EXP-0004 sample. Engineering ledgers must never be relabeled as
-prospective statistical evidence.
+Acceptance requires both partitions to pass: positive one-sided 95% lower
+moving-block-bootstrap bound (14-calendar-day blocks, 10,000 deterministic
+replicates), mean net return at least 0.10 USD/oz, profit factor at least 1.3,
+and positive mean after 1.5x assumed costs. There is no early acceptance.
+Any missing primary observation prevents acceptance. The evaluator recomputes
+gross return from fill/exit records and rejects inconsistent times or contracts.
+Block bootstrap inference is approximate and assumes historical blocks are
+informative about the process; it cannot establish future executable profits.
+
+The CLI enforces registered collection boundaries, refuses engineering-ledger
+promotion, requires a matching engine/protocol lock, and requires an external
+expected checkpoint on continuation. It writes the next checkpoint for separate
+persistence. This detects truncation or rewriting relative to a trusted anchor;
+it does not protect against someone rewriting both the ledger and its anchor.
+
+Real-data preflight run 34342647327 retrieved 9,792 GCZ6 bars. At receipt on
+2026-09-09 10:55 UTC the latest closed bar was 02:56 UTC: 479.6 minutes old.
+`EXP-0004-DATA-PREFLIGHT.json` seals this observation and artifact identity.
+**DATA_READY=false.** Account tier was not independently verified.
+
+Prospective activation is blocked. It requires a fresh successful preflight,
+an exact implementation commit/protocol lock and a separate durable checkpoint
+stream whose trusted identity is passed into every restore. The automated
+scheduler and its recovery must be exercised end to end with that stream before
+calling the system operational. The existing EXP-0003 scheduler is unchanged.
+No old or engineering outcomes may be imported into the new prospective sample.
 
 ## Verification and use
 
