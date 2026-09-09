@@ -1,0 +1,18 @@
+{
+  "experiment_id": "EXP-0004",
+  "status": "SEALED_INTEGRATION_SUCCESS",
+  "workflow_run_id": 34382828079,
+  "generation_one_job_id": 102571633153,
+  "generation_two_job_id": 102571702868,
+  "verification_job_id": 102571771188,
+  "observed_generation": 2,
+  "observed_sequence": 3,
+  "cross_job_restore_verified": true,
+  "exact_prior_prefix_verified": true,
+  "independent_anchor_schema_verified": true,
+  "market_data_used": false,
+  "strategy_outcomes_computed": false,
+  "prospective_started": false,
+  "real_orders_allowed": false,
+  "remaining_activation_blocker": "FRESH_DATA"
+}
