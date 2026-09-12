@@ -1,0 +1,126 @@
+name: Gold CIO EXP-0004 Readiness Monitor
+
+on:
+  schedule:
+    - cron: "17 13 * * 1-5"
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/gold-cio-exp0004-readiness.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gold-cio-exp0004-readiness
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: .
+  ENGINE_REF: c99a4d669e65a096a98b39ec062e7e708e195442
+  LIVE_ORDER_ALLOWED: "false"
+
+jobs:
+  readiness:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out the immutable EXP-0004 engine
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.ENGINE_REF }}
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify safety and data credential gates
+        env:
+          MASSIVE_API_KEY: ${{ secrets.MASSIVE_API_KEY }}
+        run: |
+          set -euo pipefail
+          test "$LIVE_ORDER_ALLOWED" = "false"
+          test -n "$MASSIVE_API_KEY"
+          test "$(git rev-parse HEAD)" = "$ENGINE_REF"
+
+      - name: Install runtime dependencies
+        run: python -m pip install -q numpy pyyaml
+
+      - name: Measure the real GC feed without strategy outcomes
+        env:
+          MASSIVE_API_KEY: ${{ secrets.MASSIVE_API_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p exp0004_readiness
+          python - <<'PY'
+          from datetime import datetime, timezone, timedelta
+          from pathlib import Path
+          import json
+          import os
+
+          from gold_cio_v9.shadow.ledger import HashChainLedger
+          from scripts.acquire_shadow_massive import Massive
+          from scripts.build_exp0002_structural_windows import load_bars
+          from scripts.forward_v4_cycle import collect
+
+          output = Path("exp0004_readiness")
+          started = datetime.now(timezone.utc)
+          metadata = collect(
+              Massive(os.environ["MASSIVE_API_KEY"]),
+              HashChainLedger(output / "empty.jsonl"),
+              started,
+              output,
+          )
+          bars = load_bars(output / "bars.jsonl")
+          closes = [
+              bar.event_time + timedelta(minutes=1)
+              for bar in bars
+              if bar.contract == metadata["contract"]
+          ]
+          if not closes:
+              raise RuntimeError("NO_FRONT_CONTRACT_BARS")
+          observed = datetime.now(timezone.utc)
+          latest = max(closes)
+          age = (observed - latest).total_seconds() / 60
+          result = {
+              **metadata,
+              "schema": "gold-cio-exp0004-readiness-v1",
+              "monitored_engine_commit": os.environ["ENGINE_REF"],
+              "dispatcher_commit": os.environ["GITHUB_SHA"],
+              "observed_at": observed.isoformat(),
+              "latest_bar_close_time": latest.isoformat(),
+              "feed_age_minutes": age,
+              "data_ready": 0 <= age <= 20,
+              "account_tier": "NOT_VERIFIED",
+              "strategy_outcomes_computed": False,
+              "real_orders_allowed": False,
+          }
+          (output / "readiness.json").write_text(
+              json.dumps(result, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print(json.dumps(result, sort_keys=True))
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write(
+                  "## EXP-0004 data readiness\n\n"
+                  f"- Engine: `{result['monitored_engine_commit']}`\n"
+                  f"- Contract: {result['contract']}\n"
+                  f"- Feed age: {age:.1f} minutes\n"
+                  "- Required feed age: 0–20 minutes\n"
+                  f"- DATA_READY: {str(result['data_ready']).lower()}\n"
+                  "- Strategy outcomes computed: false\n"
+                  "- Real orders allowed: false\n"
+              )
+          PY
+
+      - name: Upload immutable readiness evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: exp0004-readiness-${{ github.run_id }}-${{ github.run_attempt }}
+          path: exp0004_readiness/
+          if-no-files-found: warn
+          retention-days: 90
