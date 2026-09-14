@@ -45,7 +45,8 @@ jobs:
             scripts/preflight_exp0001.py \
             scripts/run_exp0001_formal.py \
             scripts/collect_mt5_xauusd.py \
-            scripts/preflight_mt5_xauusd.py
+            scripts/preflight_mt5_xauusd.py \\
+            scripts/run_midas_v10_shadow.py
       - name: Run Gold CIO v9 tests
         run: |
           set -euo pipefail
