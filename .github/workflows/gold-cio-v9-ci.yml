@@ -9,6 +9,7 @@ on:
       - '.github/workflows/gold-cio-v9-ci.yml'
       - '.github/workflows/tester-trust-gate.yml'
       - '.github/workflows/exp0001-nonbinding.yml'
+      - '.github/workflows/mt5-broker-feed-preflight.yml'
   pull_request:
     paths:
       - 'gold_cio_v9/**'
@@ -16,6 +17,7 @@ on:
       - '.github/workflows/gold-cio-v9-ci.yml'
       - '.github/workflows/tester-trust-gate.yml'
       - '.github/workflows/exp0001-nonbinding.yml'
+      - '.github/workflows/mt5-broker-feed-preflight.yml'
 
 jobs:
   test:
@@ -41,7 +43,9 @@ jobs:
             scripts/acquire_exp0001_massive.py \
             scripts/build_exp0001_bundle.py \
             scripts/preflight_exp0001.py \
-            scripts/run_exp0001_formal.py
+            scripts/run_exp0001_formal.py \
+            scripts/collect_mt5_xauusd.py \
+            scripts/preflight_mt5_xauusd.py
       - name: Run Gold CIO v9 tests
         run: |
           set -euo pipefail

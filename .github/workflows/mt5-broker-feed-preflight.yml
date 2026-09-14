@@ -1,0 +1,69 @@
+name: MT5 XAUUSD Broker Feed Preflight
+
+on:
+  workflow_dispatch:
+    inputs:
+      symbol:
+        description: Exact broker symbol (for example XAUUSD or GOLD)
+        required: true
+        default: XAUUSD
+  workflow_call:
+    inputs:
+      symbol:
+        description: Exact broker symbol
+        required: false
+        type: string
+        default: XAUUSD
+      engine_ref:
+        description: Gold CIO branch or immutable commit to inspect
+        required: false
+        type: string
+        default: gold-cio-v9
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mt5-broker-feed-preflight
+  cancel-in-progress: true
+
+jobs:
+  outcome-free-preflight:
+    runs-on: [self-hosted, Windows, X64, gold-cio-mt5]
+    timeout-minutes: 10
+    env:
+      PYTHONPATH: .
+      LIVE_ORDER_ALLOWED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.engine_ref || 'gold-cio-v9' }}
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install read-only MT5 bridge
+        shell: powershell
+        run: python -m pip install -q MetaTrader5 pytest
+      - name: Verify hard safety contract
+        shell: powershell
+        run: |
+          if ($env:LIVE_ORDER_ALLOWED -ne 'false') { throw 'LIVE_ORDERS_FORBIDDEN' }
+          python -m pytest -q gold_cio_v9/tests/test_mt5_snapshot.py
+      - name: Collect broker quote and closed M1 bars
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force mt5_artifacts | Out-Null
+          python scripts/collect_mt5_xauusd.py --symbol '${{ inputs.symbol }}' --bars 2880 --output mt5_artifacts/snapshot.json
+      - name: Outcome-free feed readiness gate
+        shell: powershell
+        run: |
+          python scripts/preflight_mt5_xauusd.py --snapshot mt5_artifacts/snapshot.json --symbol '${{ inputs.symbol }}' --output mt5_artifacts/preflight.json --fail-on-not-ready
+      - name: Upload redacted evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mt5-xauusd-broker-feed-preflight
+          path: mt5_artifacts/
+          if-no-files-found: warn
+          retention-days: 30
