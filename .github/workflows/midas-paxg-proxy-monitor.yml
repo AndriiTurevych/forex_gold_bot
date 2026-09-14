@@ -22,7 +22,7 @@ concurrency:
 
 env:
   PYTHONPATH: .
-  ENGINE_REF: e850133731f5c9be3b97321f529af61360ae4305
+  ENGINE_REF: 57495f0b02f108ba014ebb0d2ebcc66b57734c19
   LIVE_ORDER_ALLOWED: 'false'
 
 jobs:
@@ -68,6 +68,7 @@ jobs:
               for key in (
                   "status", "data_ready", "symbol", "instrument_role",
                   "latest_closed_bar_time", "bar_age_seconds", "spread_bps",
+                  "book_origin", "klines_origin",
                   "formal_gc_verdict_allowed", "real_orders_allowed",
               ):
                   out.write(f"- {key}: {result.get(key)}\n")
