@@ -1,0 +1,85 @@
+name: MIDAS PAXG Proxy Monitor
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/midas-paxg-proxy-monitor.yml'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/midas-paxg-proxy-monitor.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: midas-paxg-proxy-monitor
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: .
+  ENGINE_REF: 57495f0b02f108ba014ebb0d2ebcc66b57734c19
+  LIVE_ORDER_ALLOWED: 'false'
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Check out immutable MIDAS proxy engine
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.ENGINE_REF }}
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify immutable safety boundary
+        run: |
+          set -euo pipefail
+          test "$LIVE_ORDER_ALLOWED" = "false"
+          test "$(git rev-parse HEAD)" = "$ENGINE_REF"
+          python -m pip install -q pytest
+          python -m pytest -q gold_cio_v9/tests/test_binance_paxg.py
+
+      - name: Run outcome-free public PAXG preflight
+        id: preflight
+        run: python scripts/preflight_midas_paxg.py
+
+      - name: Publish result summary
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          path = Path("midas_paxg_artifacts/preflight.json")
+          if not path.exists():
+              raise SystemExit("preflight artifact missing")
+          result = json.loads(path.read_text())
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as out:
+              out.write("## MIDAS PAXG proxy monitor\n\n")
+              for key in (
+                  "status", "data_ready", "symbol", "instrument_role",
+                  "latest_closed_bar_time", "bar_age_seconds", "spread_bps",
+                  "book_origin", "klines_origin",
+                  "formal_gc_verdict_allowed", "real_orders_allowed",
+              ):
+                  out.write(f"- {key}: {result.get(key)}\n")
+              out.write(f"- reasons: {result.get('reasons', [])}\n")
+          PY
+
+      - name: Upload immutable preflight evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: midas-paxg-proxy-${{ github.run_id }}-${{ github.run_attempt }}
+          path: midas_paxg_artifacts/preflight.json
+          if-no-files-found: error
+          retention-days: 30
