@@ -1,0 +1,19 @@
+name: Gold CIO MT5 Feed Preflight
+
+on:
+  workflow_dispatch:
+    inputs:
+      symbol:
+        description: Exact gold symbol visible in the broker MT5 terminal
+        required: true
+        default: XAUUSD
+
+permissions:
+  contents: read
+
+jobs:
+  broker-feed:
+    uses: AndriiTurevych/forex_gold_bot/.github/workflows/mt5-broker-feed-preflight.yml@e904bbaa0892160ea9b2b9cd5fbfcb3bf320ff6c
+    with:
+      symbol: ${{ inputs.symbol }}
+      engine_ref: e904bbaa0892160ea9b2b9cd5fbfcb3bf320ff6c
