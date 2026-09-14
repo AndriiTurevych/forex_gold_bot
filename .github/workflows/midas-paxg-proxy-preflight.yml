@@ -1,0 +1,56 @@
+name: MIDAS PAXG Proxy Preflight
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/15 * * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: midas-paxg-proxy-preflight
+  cancel-in-progress: true
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run outcome-free PAXG proxy preflight
+        id: preflight
+        run: python scripts/preflight_midas_paxg.py
+      - name: Publish summary
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path("midas_paxg_artifacts/preflight.json")
+          if not path.exists():
+              raise SystemExit("preflight artifact missing")
+          result = json.loads(path.read_text())
+          with Path(__import__("os").environ["GITHUB_STEP_SUMMARY"]).open("a") as out:
+              out.write("## MIDAS PAXG proxy preflight\n\n")
+              for key in (
+                  "status", "data_ready", "symbol", "instrument_role",
+                  "latest_closed_bar_time", "bar_age_seconds", "spread_bps",
+                  "formal_gc_verdict_allowed", "real_orders_allowed",
+              ):
+                  out.write(f"- {key}: {result.get(key)}\n")
+              out.write(f"- reasons: {result.get('reasons', [])}\n")
+          PY
+      - name: Upload immutable preflight artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: midas-paxg-proxy-preflight-${{ github.run_id }}
+          path: midas_paxg_artifacts/preflight.json
+          if-no-files-found: error
+          retention-days: 30

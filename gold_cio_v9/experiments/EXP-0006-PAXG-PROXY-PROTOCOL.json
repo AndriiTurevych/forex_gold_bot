@@ -1,0 +1,29 @@
+{
+  "schema": "gold-cio-exp0006-protocol-v1",
+  "experiment_id": "EXP-0006",
+  "name": "MIDAS PAXG public proxy feed",
+  "status": "OUTCOME_FREE_DATA_PREFLIGHT_ONLY",
+  "instrument": "PAXGUSDT",
+  "instrument_role": "GOLD_PROXY_ONLY",
+  "source": "BINANCE_PUBLIC_SPOT",
+  "bar_interval": "1m",
+  "maximum_closed_bar_age_seconds": 120,
+  "maximum_spread_bps": 2.0,
+  "quote_timestamp_quality": "RECEIPT_TIME_ONLY",
+  "permitted_uses": [
+    "data_freshness_monitoring",
+    "gold_proxy_context",
+    "cross_market_confirmation_research",
+    "shadow_candidate_input"
+  ],
+  "forbidden_uses": [
+    "relabel_as_GC",
+    "relabel_as_XAUUSD",
+    "formal_GC_alpha_verdict",
+    "broker_fill_claim",
+    "real_order_routing"
+  ],
+  "strategy_outcomes_generated": false,
+  "formal_verdict_allowed": false,
+  "real_orders_allowed": false
+}
