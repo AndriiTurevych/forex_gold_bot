@@ -99,6 +99,8 @@ def evaluate_midas(inputs: MidasInputs, config: MidasConfig = MidasConfig()) -> 
     if inputs.risk_state.risk_fraction != config.risk_fraction:
         return _abstain("RISK_NOT_LOCKED_AT_0_25_PERCENT")
 
+    if not isinstance(inputs.h1_bias, str) or not isinstance(inputs.h4_bias, str):
+        return _abstain("INVALID_REGIME")
     h1 = inputs.h1_bias.upper()
     h4 = inputs.h4_bias.upper()
     if h1 not in {"LONG", "SHORT", "NEUTRAL"} or h4 not in {"LONG", "SHORT", "NEUTRAL"}:
@@ -106,14 +108,23 @@ def evaluate_midas(inputs: MidasInputs, config: MidasConfig = MidasConfig()) -> 
     if h1 != h4 or h1 == "NEUTRAL":
         return _abstain("HTF_REGIME_DISAGREEMENT")
 
-    signal = generate_exp0001_signal(
-        htf_location_ok=inputs.htf_location_ok,
-        sweep=inputs.sweep,
-        structure=inputs.structure,
-        zone=inputs.zone,
-        retest_time=inputs.decision_time,
-        retest_bar=inputs.retest_bar,
-    )
+    if (
+        not isfinite(inputs.sweep.sweep.level)
+        or not isfinite(inputs.sweep.sweep.depth)
+        or inputs.sweep.sweep.depth <= 0
+    ):
+        return _abstain("INVALID_SWEEP")
+    try:
+        signal = generate_exp0001_signal(
+            htf_location_ok=inputs.htf_location_ok,
+            sweep=inputs.sweep,
+            structure=inputs.structure,
+            zone=inputs.zone,
+            retest_time=inputs.decision_time,
+            retest_bar=inputs.retest_bar,
+        )
+    except (TypeError, ValueError):
+        return _abstain("INVALID_ICT_INPUT")
     if signal is None:
         return _abstain("INCOMPLETE_ICT_SEQUENCE")
     if signal.direction != h1:
