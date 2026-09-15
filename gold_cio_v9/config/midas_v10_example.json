@@ -43,5 +43,19 @@
     "high": 4313,
     "low": 4309,
     "close": 4311
+  },
+  "confidence": {
+    "trend": 0.8,
+    "location": 0.9,
+    "structure": 0.8,
+    "entry_quality": 0.7,
+    "reward_risk": 0.8,
+    "macro": 0.6,
+    "data_quality": 1,
+    "model_agreement": 0.8
+  },
+  "calibration": {
+    "wins": 0,
+    "losses": 0
   }
 }
