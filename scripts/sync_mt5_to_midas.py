@@ -16,6 +16,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from gold_cio_v9.data.mt5_snapshot import validate_snapshot
+from gold_cio_v9.live.mt5_analysis import analyze_snapshot
 from scripts.collect_mt5_xauusd import collect
 
 DEFAULT_URL = "https://jqmzpwkdbcuqnykhfmvc.supabase.co/functions/v1/ingest-mt5"
@@ -70,8 +71,13 @@ def main() -> int:
     if not readiness.broker_feed_ready:
         raise RuntimeError(f"BROKER_FEED_NOT_READY:{readiness.reason}")
 
+    equity_raw = os.environ.get("MIDAS_SHADOW_EQUITY", "").strip()
+    shadow_equity = float(equity_raw) if equity_raw else None
+    analysis = analyze_snapshot(snapshot, shadow_equity=shadow_equity)
+    _atomic_json(output.with_name("analysis.json"), analysis)
+
     body = json.dumps(
-        {"snapshot": snapshot, "preflight": preflight},
+        {"snapshot": snapshot, "preflight": preflight, "analysis": analysis},
         separators=(",", ":"),
         allow_nan=False,
     ).encode("utf-8")
