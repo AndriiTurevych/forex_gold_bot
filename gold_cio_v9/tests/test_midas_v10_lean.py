@@ -4,6 +4,7 @@ from gold_cio_v9.experiments.exp0001_signal import FVGZone, TimedStructure, Time
 from gold_cio_v9.ict_engine.features import Bar, Sweep
 from gold_cio_v9.ict_engine.structure import StructureEvent
 from gold_cio_v9.risk.gate import RiskState
+from gold_cio_v9.strategies.confidence import CalibrationEvidence, ConfidenceFactors
 from gold_cio_v9.strategies.midas_v10_lean import MidasInputs, evaluate_midas
 
 
@@ -76,3 +77,18 @@ def test_incomplete_sequence_and_naive_time_abstain():
     bad_zone = FVGZone(BASE - timedelta(hours=1), 4308.0, 4312.0, "BULLISH")
     assert evaluate_midas(valid_inputs(zone=bad_zone)).reason == "INCOMPLETE_ICT_SEQUENCE"
     assert evaluate_midas(valid_inputs(decision_time=BASE.replace(tzinfo=None))).reason == "INVALID_DECISION_TIME"
+
+
+def test_approved_decision_exposes_score_but_not_fake_probability():
+    scored = valid_inputs(
+        confidence_factors=ConfidenceFactors(
+            trend=0.8, location=0.9, structure=0.8, entry_quality=0.7,
+            reward_risk=0.8, macro=0.6, data_quality=1.0, model_agreement=0.8,
+        ),
+        calibration_evidence=CalibrationEvidence(wins=0, losses=0),
+    )
+    decision = evaluate_midas(scored)
+    assert decision.state == "CONFIRMED"
+    assert decision.confidence_score > 0
+    assert decision.calibrated_probability is None
+    assert decision.calibration_status == "UNCALIBRATED"
