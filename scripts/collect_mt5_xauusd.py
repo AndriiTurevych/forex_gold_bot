@@ -15,7 +15,7 @@ def _value(record: Any, name: str, default: Any = None) -> Any:
     return getattr(record, name, default)
 
 
-def collect(mt5: Any, *, symbol: str, bar_count: int, terminal_path: str | None = None) -> dict:
+def collect(\n    mt5: Any,\n    *,\n    symbol: str,\n    bar_count: int,\n    terminal_path: str | None = None,\n    server_utc_offset_hours: float = 0.0,\n) -> dict:
     if bar_count < 120:
         raise ValueError("bar_count must be at least 120")
     initialized = mt5.initialize(terminal_path) if terminal_path else mt5.initialize()
@@ -37,7 +37,7 @@ def collect(mt5: Any, *, symbol: str, bar_count: int, terminal_path: str | None 
         acquired_at = datetime.now(timezone.utc)
         bars = []
         for row in sorted(rates, key=lambda value: int(value["time"])):
-            start = datetime.fromtimestamp(int(row["time"]), tz=timezone.utc)
+            start = datetime.fromtimestamp(int(row["time"]), tz=timezone.utc) - server_offset
             if start + timedelta(minutes=1) > acquired_at:
                 continue
             bars.append({
@@ -96,7 +96,7 @@ def main() -> int:
         import MetaTrader5 as mt5
     except ImportError as exc:
         raise RuntimeError("MetaTrader5 package is required on the Windows MT5 host") from exc
-    payload = collect(mt5, symbol=args.symbol, bar_count=args.bars, terminal_path=args.terminal_path)
+    payload = collect(\n        mt5,\n        symbol=args.symbol,\n        bar_count=args.bars,\n        terminal_path=args.terminal_path,\n        server_utc_offset_hours=args.server_utc_offset_hours,\n    )
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = output.with_suffix(output.suffix + ".tmp")
