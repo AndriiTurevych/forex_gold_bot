@@ -19,6 +19,11 @@ from gold_cio_v9.experiments.exp0001_signal import (
 from gold_cio_v9.ict_engine.features import Bar
 from gold_cio_v9.risk.gate import RiskState, evaluate as evaluate_risk
 from gold_cio_v9.risk.position_sizing import SizingInputs, size_position
+from gold_cio_v9.strategies.confidence import (
+    CalibrationEvidence,
+    ConfidenceFactors,
+    score_confidence,
+)
 
 Bias = Literal["LONG", "SHORT", "NEUTRAL"]
 
@@ -50,6 +55,8 @@ class MidasInputs:
     structure: TimedStructure
     zone: FVGZone
     retest_bar: Bar
+    confidence_factors: ConfidenceFactors | None = None
+    calibration_evidence: CalibrationEvidence = CalibrationEvidence()
 
 
 @dataclass(frozen=True)
@@ -63,6 +70,11 @@ class MidasDecision:
     units: float = 0.0
     cash_risk: float = 0.0
     execution_allowed: bool = False
+    state: Literal["WAIT", "ARMED", "CONFIRMED", "VETO"] = "WAIT"
+    confidence_score: int = 0
+    calibrated_probability: float | None = None
+    calibration_status: str = "UNCALIBRATED"
+    calibration_sample_size: int = 0
 
 
 def _abstain(reason: str) -> MidasDecision:
@@ -167,6 +179,19 @@ def evaluate_midas(inputs: MidasInputs, config: MidasConfig = MidasConfig()) -> 
     except ValueError:
         return _abstain("POSITION_SIZING_REJECTED")
 
+    confidence = None
+    if inputs.confidence_factors is not None:
+        try:
+            confidence = score_confidence(
+                inputs.confidence_factors,
+                mss_confirmed=True,
+                retest_confirmed=True,
+                event_lock=inputs.risk_state.high_impact_event_lock,
+                evidence=inputs.calibration_evidence,
+            )
+        except ValueError:
+            return _abstain("INVALID_CONFIDENCE_INPUT")
+
     return MidasDecision(
         action=action,
         reason="SHADOW_APPROVED",
@@ -177,4 +202,9 @@ def evaluate_midas(inputs: MidasInputs, config: MidasConfig = MidasConfig()) -> 
         units=sizing.units,
         cash_risk=sizing.cash_risk,
         execution_allowed=False,
+        state="CONFIRMED" if confidence is None else confidence.state,
+        confidence_score=0 if confidence is None else confidence.confidence_score,
+        calibrated_probability=None if confidence is None else confidence.calibrated_probability,
+        calibration_status="UNCALIBRATED" if confidence is None else confidence.calibration_status,
+        calibration_sample_size=inputs.calibration_evidence.sample_size,
     )
