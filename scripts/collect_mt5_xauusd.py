@@ -15,7 +15,14 @@ def _value(record: Any, name: str, default: Any = None) -> Any:
     return getattr(record, name, default)
 
 
-def collect(\n    mt5: Any,\n    *,\n    symbol: str,\n    bar_count: int,\n    terminal_path: str | None = None,\n    server_utc_offset_hours: float = 0.0,\n) -> dict:
+def collect(
+    mt5: Any,
+    *,
+    symbol: str,
+    bar_count: int,
+    terminal_path: str | None = None,
+    server_utc_offset_hours: float = 0.0,
+) -> dict:
     if bar_count < 120:
         raise ValueError("bar_count must be at least 120")
     initialized = mt5.initialize(terminal_path) if terminal_path else mt5.initialize()
@@ -35,6 +42,7 @@ def collect(\n    mt5: Any,\n    *,\n    symbol: str,\n    bar_count: int,\n    
         if rates is None or len(rates) == 0:
             raise RuntimeError(f"MT5_RATES_UNAVAILABLE:{mt5.last_error()}")
         acquired_at = datetime.now(timezone.utc)
+        server_offset = timedelta(hours=server_utc_offset_hours)
         bars = []
         for row in sorted(rates, key=lambda value: int(value["time"])):
             start = datetime.fromtimestamp(int(row["time"]), tz=timezone.utc) - server_offset
@@ -49,8 +57,11 @@ def collect(\n    mt5: Any,\n    *,\n    symbol: str,\n    bar_count: int,\n    
                 "real_volume": int(row["real_volume"]),
             })
         event_msc = int(_value(tick, "time_msc", 0))
-        event_time = (datetime.fromtimestamp(event_msc / 1000, tz=timezone.utc)
-                      if event_msc > 0 else datetime.fromtimestamp(int(tick.time), tz=timezone.utc))
+        event_time = (
+            datetime.fromtimestamp(event_msc / 1000, tz=timezone.utc)
+            if event_msc > 0
+            else datetime.fromtimestamp(int(tick.time), tz=timezone.utc)
+        ) - server_offset
         payload = {
             "schema": SCHEMA,
             "source": "MT5_BROKER_TERMINAL",
@@ -91,12 +102,24 @@ def main() -> int:
     parser.add_argument("--symbol", default="XAUUSD")
     parser.add_argument("--bars", type=int, default=2880)
     parser.add_argument("--terminal-path")
+    parser.add_argument(
+        "--server-utc-offset-hours",
+        type=float,
+        default=0.0,
+        help="Broker server offset from UTC; for example 3 for UTC+3.",
+    )
     args = parser.parse_args()
     try:
         import MetaTrader5 as mt5
     except ImportError as exc:
         raise RuntimeError("MetaTrader5 package is required on the Windows MT5 host") from exc
-    payload = collect(\n        mt5,\n        symbol=args.symbol,\n        bar_count=args.bars,\n        terminal_path=args.terminal_path,\n        server_utc_offset_hours=args.server_utc_offset_hours,\n    )
+    payload = collect(
+        mt5,
+        symbol=args.symbol,
+        bar_count=args.bars,
+        terminal_path=args.terminal_path,
+        server_utc_offset_hours=args.server_utc_offset_hours,
+    )
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = output.with_suffix(output.suffix + ".tmp")
