@@ -12,6 +12,7 @@ from gold_cio_v9.experiments.exp0001_signal import FVGZone, TimedStructure, Time
 from gold_cio_v9.ict_engine.features import Bar, Sweep
 from gold_cio_v9.ict_engine.structure import StructureEvent
 from gold_cio_v9.risk.gate import RiskState
+from gold_cio_v9.strategies.confidence import CalibrationEvidence, ConfidenceFactors
 from gold_cio_v9.strategies.midas_v10_lean import MidasInputs, evaluate_midas
 
 
@@ -38,6 +39,8 @@ def build(payload: dict) -> MidasInputs:
         ),
         zone=FVGZone(dt(z["event_time"]), float(z["low"]), float(z["high"]), z["direction"], z.get("kind", "FVG")),
         retest_bar=Bar(b["ts"], float(b["open"]), float(b["high"]), float(b["low"]), float(b["close"])),
+        confidence_factors=ConfidenceFactors(**payload["confidence"]) if "confidence" in payload else None,
+        calibration_evidence=CalibrationEvidence(**payload.get("calibration", {})),
     )
 
 
