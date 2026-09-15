@@ -1,0 +1,58 @@
+{
+  "experiment_id": "EXP-0007-MIDAS-V10-LEAN",
+  "created_at": "2026-09-14T18:29:19Z",
+  "purpose": "Operational integration and falsification; not evidence for live promotion.",
+  "production_candidate": {
+    "instrument": "XAUUSD",
+    "timeframe": "M15",
+    "regime": [
+      "H1",
+      "H4"
+    ],
+    "sequence": [
+      "liquidity_sweep",
+      "MSS_displacement",
+      "FVG_or_IFVG",
+      "retest"
+    ],
+    "session_utc": "06:00-20:00",
+    "risk_per_trade": 0.0025,
+    "daily_loss_lock": 0.005,
+    "max_trades_per_day": 2,
+    "tp1_r": 1,
+    "tp2_r": 2,
+    "live_execution": false
+  },
+  "lona": {
+    "plan": "basic",
+    "strategy_id": "ee8e161b-6da0-4cf1-bf35-86f81f8bca11",
+    "data_id": "969fe00a-b54c-4622-aefd-f8d873f2e73c",
+    "m15_backtest": {
+      "status": "BLOCKED",
+      "reason": "INTRADAY_GLOBAL_DATA_FREE_PLAN"
+    },
+    "daily_smoke_test": {
+      "report_id": "ab6167dd-f83c-4050-812c-cc68506e8554",
+      "period": [
+        "2020-01-01",
+        "2026-09-14"
+      ],
+      "parameter_note": "Session widened to 00:00-24:00 and EMA/lookback adjusted for daily operational smoke only.",
+      "trades": 2,
+      "total_return_percent": 0.14,
+      "maximum_drawdown_percent": 0.41,
+      "profit_factor": 1.37,
+      "win_rate_percent": 50,
+      "sharpe": -4.75,
+      "expectancy": 72.36
+    }
+  },
+  "verdict": "INSUFFICIENT_DATA",
+  "live_promotion_allowed": false,
+  "next_evidence_required": [
+    "user-uploaded or paid XAUUSD M15 OHLCV",
+    "locked-parameter train/OOS split",
+    "realistic spread and slippage",
+    "minimum sample and acceptance gates"
+  ]
+}
