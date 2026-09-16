@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$RepoRoot = (Split-Path $PSScriptRoot -Parent),
+    [string]$RepoRoot,
     [string]$TerminalPath,
     [ValidateRange(15, 3600)]
     [int]$IntervalSeconds = 60,
@@ -8,6 +8,10 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+if ([string]::IsNullOrWhiteSpace($RepoRoot)) {
+    $RepoRoot = Split-Path -Path $PSScriptRoot -Parent
+}
+if ([string]::IsNullOrWhiteSpace($RepoRoot)) { throw "REPO_ROOT_NOT_RESOLVED" }
 $RepoRoot = [IO.Path]::GetFullPath($RepoRoot)
 $Runner = Join-Path $RepoRoot "scripts\run_midas_mt5_bridge.ps1"
 $HealthPath = Join-Path $RepoRoot "mt5_artifacts\health.json"
