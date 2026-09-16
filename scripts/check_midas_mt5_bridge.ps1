@@ -1,12 +1,16 @@
 [CmdletBinding()]
 param(
-    [string]$RepoRoot = (Split-Path $PSScriptRoot -Parent),
+    [string]$RepoRoot,
     [string]$TaskName = "MIDAS MT5 Bridge",
     [ValidateRange(60, 3600)]
     [int]$MaxAgeSeconds = 180
 )
 
 $ErrorActionPreference = "Stop"
+if ([string]::IsNullOrWhiteSpace($RepoRoot)) {
+    $RepoRoot = Split-Path -Path $PSScriptRoot -Parent
+}
+if ([string]::IsNullOrWhiteSpace($RepoRoot)) { throw "REPO_ROOT_NOT_RESOLVED" }
 $HealthPath = Join-Path ([IO.Path]::GetFullPath($RepoRoot)) "mt5_artifacts\health.json"
 if (-not (Test-Path $HealthPath)) { throw "HEALTH_FILE_NOT_FOUND:$HealthPath" }
 
