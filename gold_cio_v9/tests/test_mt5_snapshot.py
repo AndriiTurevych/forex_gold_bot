@@ -77,7 +77,10 @@ def test_collector_redacts_identity_and_never_routes_orders(monkeypatch):
     ]
     class MT5:
         TIMEFRAME_M1 = 1
-        def initialize(self, **kwargs): return True
+        def __init__(self): self.initialize_kwargs = None
+        def initialize(self, **kwargs):
+            self.initialize_kwargs = kwargs
+            return True
         def shutdown(self): pass
         def last_error(self): return None
         def terminal_info(self): return SimpleNamespace(connected=True)
@@ -90,7 +93,9 @@ def test_collector_redacts_identity_and_never_routes_orders(monkeypatch):
             return SimpleNamespace(time_msc=int((NOW - timedelta(seconds=1)).timestamp() * 1000),
                                    bid=10., ask=10.2, last=0., volume_real=0., flags=6)
         def copy_rates_from_pos(self, symbol, timeframe, start, count): return rates
-    result = collect(MT5(), symbol="XAUUSD", bar_count=120)
+    mt5 = MT5()
+    result = collect(mt5, symbol="XAUUSD", bar_count=120)
+    assert mt5.initialize_kwargs == {"timeout": 10_000}
     assert result["real_orders_allowed"] is False
     assert result["identity_redaction"].startswith("NO_ACCOUNT")
     assert not ({"account", "login", "name", "server"} & result.keys())

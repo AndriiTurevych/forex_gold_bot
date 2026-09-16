@@ -38,6 +38,7 @@ def main() -> int:
     parser.add_argument("--bars", type=int, default=2880)
     parser.add_argument("--server-utc-offset-hours", type=float, default=3.0)
     parser.add_argument("--terminal-path")
+    parser.add_argument("--mt5-timeout-ms", type=int, default=10_000)
     parser.add_argument("--output", default="mt5_artifacts/snapshot.json")
     parser.add_argument("--url", default=os.environ.get("MIDAS_INGEST_URL", DEFAULT_URL))
     parser.add_argument("--timeout-seconds", type=float, default=30.0)
@@ -58,6 +59,7 @@ def main() -> int:
         bar_count=args.bars,
         terminal_path=args.terminal_path,
         server_utc_offset_hours=args.server_utc_offset_hours,
+        mt5_timeout_ms=args.mt5_timeout_ms,
     )
     output = Path(args.output)
     _atomic_json(output, snapshot)

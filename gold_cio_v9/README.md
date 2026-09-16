@@ -33,3 +33,31 @@ python scripts/run_midas_v10_shadow.py --input gold_cio_v9/config/midas_v10_exam
 
 The evaluator always emits `execution_allowed=false`. Live promotion requires a
 separate, passing OOS evidence bundle; a successful smoke test is not alpha.
+
+## Windows VPS: plug-and-play MT5 shadow bridge
+
+Prerequisites: MT5 is open and connected in the current Windows session, the
+repository virtual environment exists, `MetaTrader5` is installed, and the
+`MIDAS_INGEST_TOKEN` user environment variable is set. Then install or repair
+the complete bridge with one command from the repository root:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install_midas_mt5_bridge.ps1
+```
+
+The installer performs a real one-shot preflight before replacing the scheduled
+task. It then starts one persistent interactive loop at Windows logon, because
+the MT5 Python IPC must share the signed-in desktop session with `terminal64`.
+Disconnecting Remote Desktop is safe; signing out stops MT5 and the bridge until
+the next login. The loop publishes once per minute, records
+`mt5_artifacts/bridge.log`, and atomically updates
+`mt5_artifacts/health.json`.
+
+Check health at any time:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\check_midas_mt5_bridge.ps1
+```
+
+Both the bridge and its analysis remain shadow-only:
+`execution_allowed=false` and `real_orders_allowed=false`.

@@ -22,10 +22,17 @@ def collect(
     bar_count: int,
     terminal_path: str | None = None,
     server_utc_offset_hours: float = 0.0,
+    mt5_timeout_ms: int = 10_000,
 ) -> dict:
     if bar_count < 120:
         raise ValueError("bar_count must be at least 120")
-    initialized = mt5.initialize(terminal_path) if terminal_path else mt5.initialize()
+    if mt5_timeout_ms < 1:
+        raise ValueError("mt5_timeout_ms must be positive")
+    initialized = (
+        mt5.initialize(terminal_path, timeout=mt5_timeout_ms)
+        if terminal_path
+        else mt5.initialize(timeout=mt5_timeout_ms)
+    )
     if not initialized:
         raise RuntimeError(f"MT5_INITIALIZE_FAILED:{mt5.last_error()}")
     try:
@@ -102,6 +109,7 @@ def main() -> int:
     parser.add_argument("--symbol", default="XAUUSD")
     parser.add_argument("--bars", type=int, default=2880)
     parser.add_argument("--terminal-path")
+    parser.add_argument("--mt5-timeout-ms", type=int, default=10_000)
     parser.add_argument(
         "--server-utc-offset-hours",
         type=float,
@@ -119,6 +127,7 @@ def main() -> int:
         bar_count=args.bars,
         terminal_path=args.terminal_path,
         server_utc_offset_hours=args.server_utc_offset_hours,
+        mt5_timeout_ms=args.mt5_timeout_ms,
     )
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
