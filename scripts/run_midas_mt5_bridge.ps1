@@ -6,6 +6,7 @@ param(
     [string]$TerminalPath,
     [ValidateRange(15, 3600)]
     [int]$IntervalSeconds = 60,
+    [string]$IngestUrl,
     [switch]$Once
 )
 
@@ -17,6 +18,7 @@ $ArtifactDir = Join-Path $RepoRoot "mt5_artifacts"
 $LogPath = Join-Path $ArtifactDir "bridge.log"
 $HealthPath = Join-Path $ArtifactDir "health.json"
 $HealthTemp = "$HealthPath.tmp"
+$DefaultIngestUrl = "https://jqmzpwkdbcuqnykhfmvc.supabase.co/functions/v1/ingest-mt5"
 
 New-Item -ItemType Directory -Path $ArtifactDir -Force | Out-Null
 if (-not (Test-Path $Python)) { throw "PYTHON_NOT_FOUND:$Python" }
@@ -28,6 +30,26 @@ if (-not $env:MIDAS_INGEST_TOKEN -and $savedToken) {
     $env:MIDAS_INGEST_TOKEN = $savedToken
 }
 if (-not $env:MIDAS_INGEST_TOKEN) { throw "MIDAS_INGEST_TOKEN_NOT_SET" }
+
+$savedUrl = [Environment]::GetEnvironmentVariable("MIDAS_INGEST_URL", "User")
+if ([string]::IsNullOrWhiteSpace($IngestUrl)) {
+    if (-not [string]::IsNullOrWhiteSpace($env:MIDAS_INGEST_URL)) {
+        $IngestUrl = $env:MIDAS_INGEST_URL
+    }
+    elseif (-not [string]::IsNullOrWhiteSpace($savedUrl)) {
+        $IngestUrl = $savedUrl
+    }
+    else {
+        $IngestUrl = $DefaultIngestUrl
+    }
+}
+$IngestUrl = $IngestUrl.Trim()
+$uri = $null
+if (-not [Uri]::TryCreate($IngestUrl, [UriKind]::Absolute, [ref]$uri)) {
+    throw "MIDAS_INGEST_URL_INVALID:$IngestUrl"
+}
+if ($uri.Scheme -ne "https") { throw "MIDAS_INGEST_URL_MUST_USE_HTTPS" }
+$env:MIDAS_INGEST_URL = $IngestUrl
 $env:PYTHONPATH = $RepoRoot
 
 $lastSuccessUtc = $null
@@ -35,15 +57,19 @@ if (Test-Path $HealthPath) {
     try { $lastSuccessUtc = (Get-Content $HealthPath -Raw | ConvertFrom-Json).last_success_utc } catch {}
 }
 
+$loopStartedUtc = [DateTime]::UtcNow.ToString("o")
 do {
     $attemptUtc = [DateTime]::UtcNow.ToString("o")
     $health = [ordered]@{
         ok = $false
         task = "MIDAS MT5 Bridge"
+        pid = $PID
+        loop_started_at_utc = $loopStartedUtc
         attempted_at_utc = $attemptUtc
         last_success_utc = $lastSuccessUtc
         quote_time = $null
         signal_stored = $false
+        ingest_url = $IngestUrl
         error = $null
         real_orders_allowed = $false
     }
@@ -52,12 +78,14 @@ do {
             $SyncScript,
             "--terminal-path", $TerminalPath,
             "--server-utc-offset-hours", "3",
-            "--mt5-timeout-ms", "10000"
+            "--mt5-timeout-ms", "10000",
+            "--url", $IngestUrl
         )
         $lines = @(& $Python @arguments 2>&1 | ForEach-Object { "$_" })
         $exitCode = $LASTEXITCODE
         foreach ($line in $lines) { Add-Content -Path $LogPath -Value "[$attemptUtc] $line" -Encoding UTF8 }
         if ($exitCode -ne 0) { throw "SYNC_EXIT_$exitCode" }
+        if ($lines.Count -lt 1) { throw "SYNC_NO_OUTPUT" }
         $result = $lines[-1] | ConvertFrom-Json
         if ($result.ok -ne $true) { throw "SYNC_RESULT_NOT_OK" }
         $lastSuccessUtc = [DateTime]::UtcNow.ToString("o")
