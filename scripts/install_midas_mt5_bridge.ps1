@@ -40,18 +40,8 @@ if (-not $userToken -and $processToken) {
 }
 if (-not $userToken) { throw "MIDAS_INGEST_TOKEN_NOT_SET" }
 
-$processUrl = $env:MIDAS_INGEST_URL
-$userUrl = [Environment]::GetEnvironmentVariable("MIDAS_INGEST_URL", "User")
 if ([string]::IsNullOrWhiteSpace($IngestUrl)) {
-    if (-not [string]::IsNullOrWhiteSpace($processUrl)) {
-        $IngestUrl = $processUrl
-    }
-    elseif (-not [string]::IsNullOrWhiteSpace($userUrl)) {
-        $IngestUrl = $userUrl
-    }
-    else {
-        $IngestUrl = $DefaultIngestUrl
-    }
+    $IngestUrl = $DefaultIngestUrl
 }
 $IngestUrl = $IngestUrl.Trim()
 $uri = $null
