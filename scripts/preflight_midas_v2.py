@@ -23,8 +23,10 @@ def _status_file(path: Path) -> dict:
         if not rows:
             return {"exists":True,"fresh":False,"state":None}
         row=rows[-1]
-        event_time=datetime.fromtimestamp(int(float(row["time"])),tz=timezone.utc)
-        age=(datetime.now(timezone.utc)-event_time).total_seconds()
+        # MQL TimeCurrent() is expressed in broker server time. Use the file's
+        # filesystem modification time for cross-timezone freshness instead.
+        modified=datetime.fromtimestamp(path.stat().st_mtime,tz=timezone.utc)
+        age=(datetime.now(timezone.utc)-modified).total_seconds()
         return {"exists":True,"fresh":0<=age<=180,"state":row.get("state"),"age_seconds":round(age,1)}
     except Exception as exc:
         return {"exists":True,"fresh":False,"state":None,"error":type(exc).__name__}
