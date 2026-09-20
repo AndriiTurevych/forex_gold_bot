@@ -79,11 +79,17 @@ try {
     powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\scripts\install_midas_v2_ea.ps1" -RepoRoot $RepoRoot -TerminalPath $TerminalPath
     if ($LASTEXITCODE -ne 0) { throw "EA_INSTALL_FAILED" }
 
+    if ($Mode -eq "DemoEA") {
+        & $Python ".\scripts\backtest_midas_crt_tbs_mt5.py" --terminal-path $TerminalPath --days 365
+        if ($LASTEXITCODE -ne 0) { throw "STRUCTURAL_BACKTEST_FAILED" }
+    }
+
     powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\scripts\repair_midas_mt5_bridge.ps1" -RepoRoot $RepoRoot -TerminalPath $TerminalPath
     if ($LASTEXITCODE -ne 0) { throw "BRIDGE_INSTALL_FAILED" }
 
-    $preflightArgs = @(".\scripts\preflight_midas_v2.py","--terminal-path",$TerminalPath)
-    if ($Mode -eq "DemoEA") { $preflightArgs += "--require-demo" }
+    # The EA may not yet be attached to a chart. Verify the control plane and
+    # live OpenAI structured-output path now; final DEMO preflight follows attach.
+    $preflightArgs = @(".\scripts\preflight_midas_v2.py","--terminal-path",$TerminalPath,"--probe-openai")
     & $Python @preflightArgs
     $preflightExit = $LASTEXITCODE
 
@@ -92,7 +98,10 @@ try {
     Write-Host "Attach MIDAS_V2_DemoEA to XAUUSD M5."
     Write-Host "The EA will create Profiles\Templates\MIDAS_V2_XAUUSD.tpl while DemoExecution is OFF."
     if ($Mode -eq "DemoEA") {
-        Write-Host "After preflight is green on a DEMO account, set InpEnableDemoExecution=true in EA inputs."
+        Write-Host "Structural backtest artifacts: mt5_artifacts\backtest_crt_tbs"
+        Write-Host "After attaching the EA, run the final DEMO preflight:"
+        Write-Host "  .\.venv\Scripts\python.exe .\scripts\preflight_midas_v2.py --terminal-path <terminal64.exe> --probe-openai --require-demo"
+        Write-Host "Only when ready_for_demo_ea=true, set InpEnableDemoExecution=true."
     } else {
         Write-Host "Keep InpEnableDemoExecution=false for shadow mode."
     }
