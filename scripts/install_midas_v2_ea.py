@@ -74,10 +74,14 @@ def main() -> int:
             timeout=60,
         )
         ex5 = destination.with_suffix(".ex5")
-        if proc.returncode != 0 or not ex5.exists():
-            log = log_path.read_text(encoding="utf-16", errors="replace") if log_path.exists() else ""
+        log = log_path.read_text(encoding="utf-16", errors="replace") if log_path.exists() else ""
+        # MetaEditor CLI return-code behavior has varied across builds. The durable
+        # success criterion is that compilation produced the expected EX5 file.
+        if not ex5.exists():
             raise RuntimeError(f"EA_COMPILE_FAILED:{proc.returncode}:{log[-4000:]}")
         result["compiled"] = True
+        result["metaeditor_returncode"] = proc.returncode
+        result["compile_log_tail"] = log[-1000:]
 
     print(json.dumps(result, sort_keys=True))
     return 0
