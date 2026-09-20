@@ -8,6 +8,13 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import sys
+
+ROOT=Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0,str(ROOT))
+
+from gold_cio_v9.live.ai_gate import evaluate_context
 
 
 def _enabled(name: str) -> bool:
@@ -37,6 +44,8 @@ def main() -> int:
     p.add_argument("--terminal-path",required=True)
     p.add_argument("--symbol",default="XAUUSD")
     p.add_argument("--require-demo",action="store_true")
+    p.add_argument("--probe-openai",action="store_true")
+    p.add_argument("--structural-gate",default="mt5_artifacts/backtest_crt_tbs/validation_gate.json")
     p.add_argument("--mt5-timeout-ms",type=int,default=10000)
     args=p.parse_args()
 
@@ -93,10 +102,43 @@ def main() -> int:
         checks["python_demo_enabled"]=_enabled("MIDAS_DEMO_EXECUTION_ENABLED")
         checks["execution_backend_conflict"]=checks["ea_command_enabled"] and checks["python_demo_enabled"]
 
+        checks["openai_probe"]=None
+        checks["openai_probe_reason"]=None
+        if args.probe_openai:
+            synthetic_snapshot={
+                "instrument":{"symbol":args.symbol,"point":float(getattr(info,"point",0.01) or 0.01)},
+                "quote":{"event_time":datetime.now(timezone.utc).isoformat(),"bid":4300.00,"ask":4300.20},
+            }
+            synthetic_analysis={
+                "symbol":args.symbol,
+                "decision_time":datetime.now(timezone.utc).isoformat(),
+                "state":"CONFIRMED","action":"BUY","reason":"PREFLIGHT_SYNTHETIC_CANDIDATE",
+                "h1_bias":"LONG","h4_bias":"LONG",
+                "entry":4300.20,"stop":4298.20,"tp1":4302.20,"tp2":4304.20,
+                "risk_fraction":0.0025,"confidence_score":80,
+                "support_zones":[],"resistance_zones":[],
+                "crt_tbs":{"model":"PREFLIGHT","direction":"LONG"},
+            }
+            probe=evaluate_context(synthetic_snapshot,synthetic_analysis,enabled=True)
+            checks["openai_probe"]=probe.get("status")=="OK" and probe.get("decision") in {"ALLOW","REDUCE_RISK","BLOCK"}
+            checks["openai_probe_reason"]=probe.get("reason_code")
+        else:
+            checks["openai_probe"]=checks["openai_key"]
+
+        gate_path=Path(args.structural_gate)
+        structural_gate=None
+        if gate_path.exists():
+            try:
+                structural_gate=json.loads(gate_path.read_text(encoding="utf-8"))
+            except Exception:
+                structural_gate=None
+        checks["structural_gate_exists"]=structural_gate is not None
+        checks["structural_backtest_passed"]=bool(structural_gate and structural_gate.get("structural_backtest_passed") is True)
+
         shadow_required=[
             checks["terminal_connected"],checks["account_available"],checks["symbol_available"],
             checks["tick_economics"],checks["ingest_token"],checks["openai_key"],
-            checks["ai_gate_enabled"],not checks["execution_backend_conflict"],
+            checks["ai_gate_enabled"],checks["openai_probe"],not checks["execution_backend_conflict"],
         ]
         ready_shadow=all(shadow_required)
 
@@ -104,6 +146,7 @@ def main() -> int:
             ready_shadow,checks["demo_account"],checks["account_trade_allowed"],
             checks["account_expert_allowed"],checks["terminal_trade_allowed"],
             checks["ea_compiled"],checks["ea_command_enabled"],
+            checks["structural_backtest_passed"],
             bool(checks["ea_status"].get("fresh")),
         ]
         if args.require_demo:
