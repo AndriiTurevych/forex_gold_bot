@@ -47,6 +47,12 @@ $ok = [bool]$health.ok -and $fresh -and $taskHealthy
     quote_time = $health.quote_time
     signal_stored = [bool]$health.signal_stored
     ingest_url = $health.ingest_url
+    ai_gate_status = $health.ai_gate_status
+    ai_decision = $health.ai_decision
+    ai_reason_code = $health.ai_reason_code
+    risk_approved = [bool]$health.risk_approved
+    demo_execution_allowed = [bool]$health.demo_execution_allowed
+    final_action = $health.final_action
     error = $health.error
     real_orders_allowed = $false
 } | ConvertTo-Json -Compress
