@@ -49,10 +49,9 @@ def collect(
         if rates is None or len(rates) == 0:
             raise RuntimeError(f"MT5_RATES_UNAVAILABLE:{mt5.last_error()}")
         acquired_at = datetime.now(timezone.utc)
-        server_offset = timedelta(hours=server_utc_offset_hours)
         bars = []
         for row in sorted(rates, key=lambda value: int(value["time"])):
-            start = datetime.fromtimestamp(int(row["time"]), tz=timezone.utc) - server_offset
+            start = datetime.fromtimestamp(int(row["time"]), tz=timezone.utc)
             if start + timedelta(minutes=1) > acquired_at:
                 continue
             bars.append({
@@ -68,7 +67,7 @@ def collect(
             datetime.fromtimestamp(event_msc / 1000, tz=timezone.utc)
             if event_msc > 0
             else datetime.fromtimestamp(int(tick.time), tz=timezone.utc)
-        ) - server_offset
+        )
         payload = {
             "schema": SCHEMA,
             "source": "MT5_BROKER_TERMINAL",
@@ -117,7 +116,7 @@ def main() -> int:
         "--server-utc-offset-hours",
         type=float,
         default=0.0,
-        help="Broker server offset from UTC; for example 3 for UTC+3.",
+        help="Deprecated compatibility option. MT5 Python bar/tick timestamps are already UTC.",
     )
     args = parser.parse_args()
     try:
