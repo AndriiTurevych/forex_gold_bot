@@ -28,24 +28,29 @@ if ([string]::IsNullOrWhiteSpace($TerminalPath) -or -not (Test-Path $TerminalPat
 $Python = Join-Path $RepoRoot ".venv\Scripts\python.exe"
 if (-not (Test-Path $Python)) { throw "PYTHON_NOT_FOUND:$Python" }
 
+function Set-MidasEnv([string]$Name,[string]$Value) {
+    [Environment]::SetEnvironmentVariable($Name,$Value,"User")
+    Set-Item -Path ("Env:" + $Name) -Value $Value
+}
+
 Push-Location $RepoRoot
 try {
     git fetch origin
     git checkout midas-v2-ai-gate
     git pull origin midas-v2-ai-gate
 
-    [Environment]::SetEnvironmentVariable("MIDAS_AI_GATE_ENABLED","1","User")
-    [Environment]::SetEnvironmentVariable("MIDAS_OPENAI_MODEL","gpt-5.6-sol","User")
-    [Environment]::SetEnvironmentVariable("MIDAS_EA_COMMAND_ENABLED","1","User")
-    [Environment]::SetEnvironmentVariable("MIDAS_DEMO_EXECUTION_ENABLED","0","User")
-    [Environment]::SetEnvironmentVariable("MIDAS_MAX_RISK_FRACTION","0.0025","User")
-    [Environment]::SetEnvironmentVariable("MIDAS_MAX_DAILY_LOSS_FRACTION","0.01","User")
-    [Environment]::SetEnvironmentVariable("MIDAS_MAX_CONSECUTIVE_LOSSES","3","User")
-    [Environment]::SetEnvironmentVariable("MIDAS_MAX_OPEN_POSITIONS","1","User")
-    [Environment]::SetEnvironmentVariable("MIDAS_MIN_RR_TP2","1.8","User")
-    [Environment]::SetEnvironmentVariable("MIDAS_MIN_CONFIDENCE_SCORE","60","User")
-    [Environment]::SetEnvironmentVariable("MIDAS_MAX_SPREAD_POINTS","80","User")
-    [Environment]::SetEnvironmentVariable("MIDAS_EA_COMMAND_TTL_SECONDS","90","User")
+    Set-MidasEnv "MIDAS_AI_GATE_ENABLED" "1"
+    Set-MidasEnv "MIDAS_OPENAI_MODEL" "gpt-5.6-sol"
+    Set-MidasEnv "MIDAS_EA_COMMAND_ENABLED" "1"
+    Set-MidasEnv "MIDAS_DEMO_EXECUTION_ENABLED" "0"
+    Set-MidasEnv "MIDAS_MAX_RISK_FRACTION" "0.0025"
+    Set-MidasEnv "MIDAS_MAX_DAILY_LOSS_FRACTION" "0.01"
+    Set-MidasEnv "MIDAS_MAX_CONSECUTIVE_LOSSES" "3"
+    Set-MidasEnv "MIDAS_MAX_OPEN_POSITIONS" "1"
+    Set-MidasEnv "MIDAS_MIN_RR_TP2" "1.8"
+    Set-MidasEnv "MIDAS_MIN_CONFIDENCE_SCORE" "60"
+    Set-MidasEnv "MIDAS_MAX_SPREAD_POINTS" "80"
+    Set-MidasEnv "MIDAS_EA_COMMAND_TTL_SECONDS" "90"
 
     $apiKey = [Environment]::GetEnvironmentVariable("OPENAI_API_KEY","User")
     if ([string]::IsNullOrWhiteSpace($apiKey)) {
@@ -64,7 +69,10 @@ try {
     }
 
     $ingest = [Environment]::GetEnvironmentVariable("MIDAS_INGEST_TOKEN","User")
-    if ([string]::IsNullOrWhiteSpace($ingest) -and [string]::IsNullOrWhiteSpace($env:MIDAS_INGEST_TOKEN)) {
+    if ([string]::IsNullOrWhiteSpace($env:MIDAS_INGEST_TOKEN) -and -not [string]::IsNullOrWhiteSpace($ingest)) {
+        $env:MIDAS_INGEST_TOKEN = $ingest
+    }
+    if ([string]::IsNullOrWhiteSpace($env:MIDAS_INGEST_TOKEN)) {
         throw "MIDAS_INGEST_TOKEN_NOT_SET"
     }
 
