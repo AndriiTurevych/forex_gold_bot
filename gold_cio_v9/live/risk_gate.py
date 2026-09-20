@@ -1,8 +1,4 @@
-"""Deterministic risk gate for MIDAS shadow/demo execution.
-
-This module is intentionally independent of model output beyond the three-state
-AI decision and an allowed risk-reduction multiplier. It never enables real orders.
-"""
+"""Deterministic fail-closed risk gate for MIDAS shadow/demo execution."""
 from __future__ import annotations
 
 from dataclasses import dataclass, asdict
@@ -11,7 +7,11 @@ import os
 from typing import Any
 
 
-RISK_GATE_SCHEMA = "midas-risk-gate-v1"
+RISK_GATE_SCHEMA = "midas-risk-gate-v2"
+
+
+def _enabled(name: str) -> bool:
+    return os.environ.get(name, "0").strip().lower() in {"1", "true", "yes", "on"}
 
 
 @dataclass(frozen=True)
@@ -19,6 +19,7 @@ class RiskLimits:
     max_risk_fraction: float = 0.0025
     max_spread_points: float = 80.0
     min_rr_to_tp2: float = 1.8
+    min_confidence_score: int = 60
     max_daily_loss_fraction: float = 0.01
     max_consecutive_losses: int = 3
     max_open_positions: int = 1
@@ -29,6 +30,7 @@ class RiskLimits:
             max_risk_fraction=float(os.environ.get("MIDAS_MAX_RISK_FRACTION", "0.0025")),
             max_spread_points=float(os.environ.get("MIDAS_MAX_SPREAD_POINTS", "80")),
             min_rr_to_tp2=float(os.environ.get("MIDAS_MIN_RR_TP2", "1.8")),
+            min_confidence_score=int(os.environ.get("MIDAS_MIN_CONFIDENCE_SCORE", "60")),
             max_daily_loss_fraction=float(os.environ.get("MIDAS_MAX_DAILY_LOSS_FRACTION", "0.01")),
             max_consecutive_losses=int(os.environ.get("MIDAS_MAX_CONSECUTIVE_LOSSES", "3")),
             max_open_positions=int(os.environ.get("MIDAS_MAX_OPEN_POSITIONS", "1")),
@@ -42,12 +44,20 @@ def evaluate_risk(
     *,
     account_state: dict[str, Any] | None = None,
     limits: RiskLimits | None = None,
+    require_account_state: bool = False,
 ) -> dict[str, Any]:
     limits = limits or RiskLimits.from_env()
     reasons: list[str] = []
 
+    if _enabled("MIDAS_MANUAL_EVENT_LOCK"):
+        reasons.append("MANUAL_EVENT_LOCK")
+
     if analysis.get("state") != "CONFIRMED" or analysis.get("action") not in {"BUY", "SELL"}:
         reasons.append("NO_CONFIRMED_CANDIDATE")
+
+    confidence = int(analysis.get("confidence_score") or 0)
+    if confidence < limits.min_confidence_score:
+        reasons.append("CONFIDENCE_BELOW_MINIMUM")
 
     ai_decision = ai_gate.get("decision")
     if ai_decision not in {"ALLOW", "REDUCE_RISK"}:
@@ -94,8 +104,18 @@ def evaluate_risk(
         spread_points = None
         reasons.append("SPREAD_UNKNOWN")
 
+    if require_account_state and not account_state:
+        reasons.append("ACCOUNT_STATE_REQUIRED")
+
     account_state = account_state or {}
     if account_state:
+        if require_account_state and account_state.get("demo_account") is not True:
+            reasons.append("NON_DEMO_ACCOUNT_BLOCKED")
+        if require_account_state and not bool(account_state.get("trade_allowed")):
+            reasons.append("ACCOUNT_TRADING_NOT_ALLOWED")
+        if require_account_state and not bool(account_state.get("trade_expert")):
+            reasons.append("EXPERT_TRADING_NOT_ALLOWED")
+
         daily_loss = float(account_state.get("daily_loss_fraction", 0.0) or 0.0)
         consecutive_losses = int(account_state.get("consecutive_losses", 0) or 0)
         open_positions = int(account_state.get("open_positions", 0) or 0)
@@ -129,6 +149,7 @@ def evaluate_risk(
         "risk_multiplier": multiplier if approved else 0.0,
         "rr_to_tp2": round(rr_to_tp2, 4) if rr_to_tp2 is not None else None,
         "spread_points": round(spread_points, 2) if spread_points is not None else None,
+        "confidence_score": confidence,
         "reasons": reasons or ["APPROVED_FOR_DEMO_ONLY"],
         "limits": asdict(limits),
     }
