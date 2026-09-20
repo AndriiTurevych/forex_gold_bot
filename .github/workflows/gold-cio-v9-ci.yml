@@ -6,6 +6,7 @@ on:
     paths:
       - 'gold_cio_v9/**'
       - 'scripts/**'
+      - 'mt5/**'
       - '.github/workflows/gold-cio-v9-ci.yml'
       - '.github/workflows/tester-trust-gate.yml'
       - '.github/workflows/exp0001-nonbinding.yml'
@@ -14,6 +15,7 @@ on:
     paths:
       - 'gold_cio_v9/**'
       - 'scripts/**'
+      - 'mt5/**'
       - '.github/workflows/gold-cio-v9-ci.yml'
       - '.github/workflows/tester-trust-gate.yml'
       - '.github/workflows/exp0001-nonbinding.yml'
@@ -46,6 +48,13 @@ jobs:
             scripts/run_exp0001_formal.py \
             scripts/collect_mt5_xauusd.py \
             scripts/preflight_mt5_xauusd.py \
+            scripts/sync_mt5_to_midas.py \
+            scripts/preflight_midas_v2.py \
+            scripts/backtest_midas_crt_tbs_mt5.py \
+            scripts/collect_midas_forward_results.py \
+            scripts/run_midas_monte_carlo.py \
+            scripts/run_midas_demo_execution.py \
+            scripts/install_midas_v2_ea.py \
             scripts/run_midas_v10_shadow.py
       - name: Run Gold CIO v9 tests
         run: |

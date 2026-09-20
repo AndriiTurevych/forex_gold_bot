@@ -16,6 +16,9 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from gold_cio_v9.data.mt5_snapshot import validate_snapshot
+from gold_cio_v9.live.account_state import collect_account_state
+from gold_cio_v9.live.decision_pipeline import build_decision
+from gold_cio_v9.live.ea_command import publish_ea_command
 from gold_cio_v9.live.mt5_analysis import analyze_snapshot
 from scripts.collect_mt5_xauusd import collect
 
@@ -73,10 +76,35 @@ def main() -> int:
     if not readiness.broker_feed_ready:
         raise RuntimeError(f"BROKER_FEED_NOT_READY:{readiness.reason}")
 
+    account_state = collect_account_state(
+        mt5,
+        terminal_path=args.terminal_path,
+        server_utc_offset_hours=args.server_utc_offset_hours,
+        mt5_timeout_ms=args.mt5_timeout_ms,
+    )
+    _atomic_json(output.with_name("account_state.json"), account_state)
+
     equity_raw = os.environ.get("MIDAS_SHADOW_EQUITY", "").strip()
-    shadow_equity = float(equity_raw) if equity_raw else None
+    shadow_equity = float(equity_raw) if equity_raw else float(account_state["equity"])
     analysis = analyze_snapshot(snapshot, shadow_equity=shadow_equity)
     _atomic_json(output.with_name("analysis.json"), analysis)
+
+    # MIDAS v2 control plane. Account state is local-only and is not uploaded.
+    decision = build_decision(
+        snapshot,
+        analysis=analysis,
+        shadow_equity=shadow_equity,
+        account_state=account_state,
+    )
+    _atomic_json(output.with_name("decision.json"), decision)
+
+    ea_command = publish_ea_command(
+        mt5,
+        decision,
+        terminal_path=args.terminal_path,
+        mt5_timeout_ms=args.mt5_timeout_ms,
+    )
+    _atomic_json(output.with_name("ea_command.json"), ea_command)
 
     body = json.dumps(
         {"snapshot": snapshot, "preflight": preflight, "analysis": analysis},
@@ -90,7 +118,7 @@ def main() -> int:
         headers={
             "content-type": "application/json",
             "x-midas-ingest-token": token,
-            "user-agent": "midas-mt5-bridge/1",
+            "user-agent": "midas-mt5-bridge/2",
         },
     )
     try:
