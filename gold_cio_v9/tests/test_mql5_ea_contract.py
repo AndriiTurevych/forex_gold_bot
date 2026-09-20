@@ -53,3 +53,20 @@ def test_ea_reads_v2_dashboard_command_schema():
     assert 'setup_model' in source
     assert 'confidence' in source
     assert 'spread_points' in source
+
+
+def test_ea_has_high_impact_usd_calendar_veto():
+    source = _source()
+    assert "CalendarValueHistory" in source
+    assert "CALENDAR_IMPORTANCE_HIGH" in source
+    assert "HIGH_IMPACT_USD_EVENT_LOCK" in source
+    assert "ECONOMIC_CALENDAR_UNAVAILABLE" in source
+
+
+def test_ea_journals_open_and_close_events_for_empirical_validation():
+    source = _source()
+    assert "MIDAS_V2_EA_EVENT_1" in source
+    assert 'AppendEvent("OPENED"' in source
+    assert 'AppendEvent("CLOSE_DEAL"' in source
+    assert "OnTradeTransaction" in source
+    assert "OrderCalcProfit" in source
