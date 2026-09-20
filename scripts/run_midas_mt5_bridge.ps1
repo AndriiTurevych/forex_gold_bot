@@ -18,6 +18,7 @@ $ArtifactDir = Join-Path $RepoRoot "mt5_artifacts"
 $LogPath = Join-Path $ArtifactDir "bridge.log"
 $HealthPath = Join-Path $ArtifactDir "health.json"
 $HealthTemp = "$HealthPath.tmp"
+$DecisionPath = Join-Path $ArtifactDir "decision.json"
 $DefaultIngestUrl = "https://jqmzpwkdbcuqnykhfmvc.supabase.co/functions/v1/ingest-mt5"
 
 New-Item -ItemType Directory -Path $ArtifactDir -Force | Out-Null
@@ -71,6 +72,12 @@ do {
         signal_stored = $false
         ingest_url = $IngestUrl
         error = $null
+        ai_gate_status = $null
+        ai_decision = $null
+        ai_reason_code = $null
+        risk_approved = $false
+        demo_execution_allowed = $false
+        final_action = "ABSTAIN"
         real_orders_allowed = $false
     }
     try {
@@ -88,6 +95,25 @@ do {
         if ($lines.Count -lt 1) { throw "SYNC_NO_OUTPUT" }
         $result = $lines[-1] | ConvertFrom-Json
         if ($result.ok -ne $true) { throw "SYNC_RESULT_NOT_OK" }
+
+        if (Test-Path $DecisionPath) {
+            try {
+                $decision = Get-Content $DecisionPath -Raw | ConvertFrom-Json
+                $health.ai_gate_status = [string]$decision.ai_gate.status
+                $health.ai_decision = [string]$decision.ai_gate.decision
+                $health.ai_reason_code = [string]$decision.ai_gate.reason_code
+                $health.risk_approved = [bool]$decision.risk_gate.approved
+                $health.demo_execution_allowed = [bool]$decision.demo_execution_allowed
+                $health.final_action = [string]$decision.final_action
+            }
+            catch {
+                throw "DECISION_ARTIFACT_INVALID:$($_.Exception.Message)"
+            }
+        }
+        else {
+            throw "DECISION_ARTIFACT_MISSING"
+        }
+
         $lastSuccessUtc = [DateTime]::UtcNow.ToString("o")
         $health.ok = $true
         $health.last_success_utc = $lastSuccessUtc
@@ -98,7 +124,7 @@ do {
         $health.error = $_.Exception.Message
         Add-Content -Path $LogPath -Value "[$attemptUtc] ERROR $($health.error)" -Encoding UTF8
     }
-    $health | ConvertTo-Json -Depth 4 | Set-Content -Path $HealthTemp -Encoding UTF8
+    $health | ConvertTo-Json -Depth 5 | Set-Content -Path $HealthTemp -Encoding UTF8
     Move-Item -Path $HealthTemp -Destination $HealthPath -Force
     if (-not $Once) { Start-Sleep -Seconds $IntervalSeconds }
 } while (-not $Once)
