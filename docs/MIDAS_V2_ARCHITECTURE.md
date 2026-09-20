@@ -40,3 +40,32 @@ Phase 1: shadow decisions only. Compare deterministic candidate, AI decision, ri
 Phase 2: demo execution only. The executor hard-checks MT5 ACCOUNT_TRADE_MODE_DEMO, prevents duplicate decisions and duplicate MIDAS positions, places broker-side SL/TP2, and moves SL to breakeven after TP1. Position protection remains local even if the AI/API is unavailable.
 
 Phase 3: real execution is not enabled by this branch. It requires a separate explicit release gate, broker/account preflight, kill switch, and validated drawdown/operational criteria.
+
+## MT5 Expert Advisor backend
+
+The optional EA backend is `mt5/MQL5/Experts/MIDAS/MIDAS_V2_DemoEA.mq5`.
+
+The Python control plane publishes one semicolon-delimited command into MetaTrader `Terminal/Common/Files/MIDAS/midas_command.csv`. MQL5 `FILE_COMMON` is used so the EA and Python bridge share the same sandboxed command channel.
+
+Safety invariants:
+- the EA must be explicitly enabled in its inputs;
+- only `ACCOUNT_TRADE_MODE_DEMO` is accepted;
+- terminal, EA and account-side automated-trading permissions must all be enabled;
+- the command must carry `real_orders_allowed=0`;
+- expired commands, duplicate decisions, excessive spread, excessive entry drift and invalid geometry are blocked;
+- any existing position on the symbol blocks a new MIDAS entry;
+- server `ResultRetcode()` is checked after trade operations;
+- broker-side SL and TP2 are placed with the entry;
+- after TP1 the EA can move SL to breakeven;
+- Python demo execution and EA execution cannot be enabled simultaneously.
+
+Environment:
+- `MIDAS_EA_COMMAND_ENABLED=1` publishes commands for the EA.
+- `MIDAS_EA_COMMAND_TTL_SECONDS` defaults to 90.
+- Keep `MIDAS_DEMO_EXECUTION_ENABLED=0` when using the EA backend.
+
+Install and compile on the MT5 Windows host:
+
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install_midas_v2_ea.ps1`
+
+After compilation, attach `MIDAS_V2_DemoEA` to the broker XAUUSD chart. Leave `InpEnableDemoExecution=false` for shadow validation. Enable it only on a confirmed DEMO account after command flow is verified.
