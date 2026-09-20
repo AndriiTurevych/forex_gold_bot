@@ -35,3 +35,21 @@ def test_ea_manages_breakeven_and_checks_server_retcode():
     assert "STOP_MOVED_TO_BREAKEVEN" in source
     assert "trade.ResultRetcode()" in source
     assert "TRADE_RETCODE_DONE" in source
+
+
+def test_ea_renders_cockpit_and_saves_native_template():
+    source = _source()
+    assert "UpdateCockpit" in source
+    assert "ChartSaveTemplate" in source
+    assert "MIDAS_V2_XAUUSD" in source
+    assert "MIDAS 2.0 | " in source
+    assert "GPT GATE" in source
+    assert "RISK GATE" in source
+
+
+def test_ea_reads_v2_dashboard_command_schema():
+    source = _source()
+    assert 'MIDAS_V2_EA_2' in source
+    assert 'setup_model' in source
+    assert 'confidence' in source
+    assert 'spread_points' in source
