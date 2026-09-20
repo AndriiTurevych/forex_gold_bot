@@ -8,6 +8,7 @@
 input bool   InpEnableDemoExecution      = false;
 input string InpCommandFile              = "MIDAS\\midas_command.csv";
 input string InpStatusFile               = "MIDAS\\midas_ea_status.csv";
+input string InpEventFile                = "MIDAS\\midas_ea_events.csv";
 input int    InpPollSeconds              = 1;
 input int    InpDeviationPoints          = 30;
 input bool   InpMoveToBreakevenAtTP1     = true;
@@ -17,6 +18,7 @@ input bool   InpSaveSafeTemplateOnInit   = true;
 input string InpTemplateName             = "MIDAS_V2_XAUUSD";
 
 CTrade trade;
+long g_midas_magic=56002026;
 
 struct MidasCommand
 {
@@ -62,6 +64,23 @@ void WriteStatus(const string state,const string detail,const long decision_id=0
    if(h==INVALID_HANDLE) return;
    FileWrite(h,"schema","time","state","detail","decision_id","position_ticket","real_orders_allowed");
    FileWrite(h,"MIDAS_V2_EA_STATUS_2",(long)TimeCurrent(),state,detail,decision_id,(long)ticket,0);
+   FileClose(h);
+}
+
+void AppendEvent(const string event_name,const long decision_id,const string signal_id,
+                 const string symbol,const string action,const long position_id,const ulong deal_ticket,
+                 const double volume,const double price,const double sl,const double tp1,const double tp2,
+                 const double risk_cash,const double net_pnl)
+{
+   int h=FileOpen(InpEventFile,FILE_READ|FILE_WRITE|FILE_CSV|FILE_ANSI|FILE_COMMON|FILE_SHARE_READ|FILE_SHARE_WRITE,';');
+   if(h==INVALID_HANDLE) return;
+   if(FileSize(h)==0)
+      FileWrite(h,"schema","time","event","decision_id","signal_id","symbol","action",
+                "position_id","deal_ticket","volume","price","sl","tp1","tp2","risk_cash","net_pnl","real_orders_allowed");
+   FileSeek(h,0,SEEK_END);
+   FileWrite(h,"MIDAS_V2_EA_EVENT_1",(long)TimeCurrent(),event_name,decision_id,signal_id,symbol,action,
+             position_id,(long)deal_ticket,volume,price,sl,tp1,tp2,risk_cash,net_pnl,0);
+   FileFlush(h);
    FileClose(h);
 }
 
@@ -209,7 +228,7 @@ void SetPanelBackground()
    ObjectSetInteger(0,name,OBJPROP_XDISTANCE,12);
    ObjectSetInteger(0,name,OBJPROP_YDISTANCE,28);
    ObjectSetInteger(0,name,OBJPROP_XSIZE,285);
-   ObjectSetInteger(0,name,OBJPROP_YSIZE,405);
+   ObjectSetInteger(0,name,OBJPROP_YSIZE,450);
    ObjectSetInteger(0,name,OBJPROP_BGCOLOR,clrBlack);
    ObjectSetInteger(0,name,OBJPROP_COLOR,clrDimGray);
    ObjectSetInteger(0,name,OBJPROP_BORDER_TYPE,BORDER_FLAT);
@@ -459,6 +478,17 @@ void ProcessCommand(const MidasCommand &c)
 
    ulong ticket=0;
    FindMidasPosition(c.symbol,c.magic,ticket);
+   long position_id=0;
+   if(ticket>0 && PositionSelectByTicket(ticket))
+      position_id=(long)PositionGetInteger(POSITION_IDENTIFIER);
+   double risk_cash=0.0;
+   ENUM_ORDER_TYPE calc_type=(c.action=="BUY" ? ORDER_TYPE_BUY : ORDER_TYPE_SELL);
+   double calc_profit=0.0;
+   if(OrderCalcProfit(calc_type,c.symbol,safe_volume,price,c.sl,calc_profit))
+      risk_cash=MathAbs(calc_profit);
+   AppendEvent("OPENED",c.decision_id,c.signal_id,c.symbol,c.action,position_id,trade.ResultDeal(),
+               safe_volume,price,c.sl,c.tp1,c.tp2,risk_cash,0.0);
+   g_midas_magic=c.magic;
    GlobalVariableSet(GVLastDecision(),(double)c.decision_id);
    GlobalVariableSet(GVTP1(c.magic),c.tp1);
    GlobalVariableSet(GVEntry(c.magic),price);
@@ -473,6 +503,7 @@ int OnInit()
 
    MidasCommand c;
    bool ok=ReadCommand(c);
+   if(ok) g_midas_magic=c.magic;
    UpdateCockpit(ok,c);
 
    // Save a real terminal-native .tpl only while execution is safely disabled.
@@ -499,6 +530,7 @@ void OnTimer()
    ManagePosition();
    MidasCommand c;
    bool ok=ReadCommand(c);
+   if(ok) g_midas_magic=c.magic;
    UpdateCockpit(ok,c);
    if(ok) ProcessCommand(c);
    else WriteStatus("WAIT","COMMAND_FILE_UNAVAILABLE");
@@ -507,4 +539,33 @@ void OnTimer()
 void OnTick()
 {
    // Strategy decisions are never generated from ticks inside the EA.
+}
+
+
+void OnTradeTransaction(const MqlTradeTransaction &trans,
+                        const MqlTradeRequest &request,
+                        const MqlTradeResult &result)
+{
+   if(trans.type!=TRADE_TRANSACTION_DEAL_ADD || trans.deal==0)
+      return;
+   if(!HistoryDealSelect(trans.deal))
+      return;
+
+   long magic=(long)HistoryDealGetInteger(trans.deal,DEAL_MAGIC);
+   if(magic!=g_midas_magic)
+      return;
+
+   ENUM_DEAL_ENTRY entry_type=(ENUM_DEAL_ENTRY)HistoryDealGetInteger(trans.deal,DEAL_ENTRY);
+   if(entry_type!=DEAL_ENTRY_OUT && entry_type!=DEAL_ENTRY_OUT_BY)
+      return;
+
+   long position_id=(long)HistoryDealGetInteger(trans.deal,DEAL_POSITION_ID);
+   string symbol=HistoryDealGetString(trans.deal,DEAL_SYMBOL);
+   double volume=HistoryDealGetDouble(trans.deal,DEAL_VOLUME);
+   double price=HistoryDealGetDouble(trans.deal,DEAL_PRICE);
+   double net_pnl=HistoryDealGetDouble(trans.deal,DEAL_PROFIT)
+                 +HistoryDealGetDouble(trans.deal,DEAL_COMMISSION)
+                 +HistoryDealGetDouble(trans.deal,DEAL_SWAP)
+                 +HistoryDealGetDouble(trans.deal,DEAL_FEE);
+   AppendEvent("CLOSE_DEAL",0,"",symbol,"",position_id,trans.deal,volume,price,0,0,0,0,net_pnl);
 }
