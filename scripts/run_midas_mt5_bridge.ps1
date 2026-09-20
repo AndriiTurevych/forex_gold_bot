@@ -19,6 +19,7 @@ $LogPath = Join-Path $ArtifactDir "bridge.log"
 $HealthPath = Join-Path $ArtifactDir "health.json"
 $HealthTemp = "$HealthPath.tmp"
 $DecisionPath = Join-Path $ArtifactDir "decision.json"
+$EACommandArtifactPath = Join-Path $ArtifactDir "ea_command.json"
 $DemoScript = Join-Path $RepoRoot "scripts\run_midas_demo_execution.py"
 $DemoOutputPath = Join-Path $ArtifactDir "demo_execution.json"
 $DefaultIngestUrl = "https://jqmzpwkdbcuqnykhfmvc.supabase.co/functions/v1/ingest-mt5"
@@ -77,6 +78,8 @@ do {
         ai_gate_status = $null
         ai_decision = $null
         ai_reason_code = $null
+        ea_command_published = $false
+        ea_command_action = "ABSTAIN"
         risk_approved = $false
         demo_execution_allowed = $false
         final_action = "ABSTAIN"
@@ -118,6 +121,19 @@ do {
         }
         else {
             throw "DECISION_ARTIFACT_MISSING"
+        }
+
+        if (Test-Path $EACommandArtifactPath) {
+            try {
+                $eaCommand = Get-Content $EACommandArtifactPath -Raw | ConvertFrom-Json
+                $health.ea_command_published = [bool]$eaCommand.published
+                if (-not [string]::IsNullOrWhiteSpace([string]$eaCommand.action)) {
+                    $health.ea_command_action = [string]$eaCommand.action
+                }
+            }
+            catch {
+                throw "EA_COMMAND_ARTIFACT_INVALID:$($_.Exception.Message)"
+            }
         }
 
         $savedDemoEnabled = [Environment]::GetEnvironmentVariable("MIDAS_DEMO_EXECUTION_ENABLED", "User")
