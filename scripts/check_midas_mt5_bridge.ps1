@@ -59,6 +59,7 @@ $ok = [bool]$health.ok -and $fresh -and $taskHealthy
     demo_execution_reason = $health.demo_execution_reason
     demo_order_sent = [bool]$health.demo_order_sent
     position_managed = [bool]$health.position_managed
+    resolved_trades = [int]$health.resolved_trades
     error = $health.error
     real_orders_allowed = $false
 } | ConvertTo-Json -Compress
