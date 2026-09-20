@@ -1,19 +1,16 @@
-"""MIDAS v2 decision pipeline: strategy -> AI context -> risk gate.
-
-The output is a demo/shadow decision artifact. Real-order execution remains
-hard-disabled here by design.
-"""
+"""MIDAS v2 decision pipeline: CRT/TBS -> AI context -> deterministic risk gate."""
 from __future__ import annotations
 
 from math import floor
 from typing import Any
 
+from gold_cio_v9.live.account_state import execution_backend_enabled
 from gold_cio_v9.live.ai_gate import evaluate_context
 from gold_cio_v9.live.mt5_analysis import analyze_snapshot
 from gold_cio_v9.live.risk_gate import evaluate_risk
 
 
-DECISION_SCHEMA = "midas-decision-pipeline-v2"
+DECISION_SCHEMA = "midas-decision-pipeline-v3"
 
 
 def _adjust_volume(volume: Any, multiplier: float, instrument: dict[str, Any]) -> float | None:
@@ -39,7 +36,14 @@ def build_decision(
 ) -> dict[str, Any]:
     analysis = analysis or analyze_snapshot(snapshot, shadow_equity=shadow_equity)
     ai_gate = evaluate_context(snapshot, analysis)
-    risk_gate = evaluate_risk(snapshot, analysis, ai_gate, account_state=account_state)
+    require_account = execution_backend_enabled()
+    risk_gate = evaluate_risk(
+        snapshot,
+        analysis,
+        ai_gate,
+        account_state=account_state,
+        require_account_state=require_account,
+    )
 
     approved = bool(risk_gate.get("demo_execution_allowed"))
     multiplier = float(risk_gate.get("risk_multiplier") or 0.0)
@@ -61,10 +65,17 @@ def build_decision(
 
     return {
         "schema": DECISION_SCHEMA,
+        "strategy": analysis.get("strategy"),
+        "signal_id": analysis.get("signal_id"),
+        "setup_model": analysis.get("setup_model"),
         "symbol": analysis.get("symbol"),
         "decision_time": analysis.get("decision_time"),
         "candidate_action": analysis.get("action"),
         "final_action": analysis.get("action") if approved else "ABSTAIN",
+        "h1_bias": analysis.get("h1_bias"),
+        "h4_bias": analysis.get("h4_bias"),
+        "confidence_score": analysis.get("confidence_score"),
+        "risk_fraction": analysis.get("risk_fraction"),
         "entry": analysis.get("entry") if approved else None,
         "stop": analysis.get("stop") if approved else None,
         "tp1": analysis.get("tp1") if approved else None,
