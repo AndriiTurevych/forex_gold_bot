@@ -13,7 +13,7 @@ ROOT=Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0,str(ROOT))
 
-from gold_cio_v9.live.backtest_crt_tbs import backtest_crt_tbs, metrics
+from gold_cio_v9.live.backtest_crt_tbs import backtest_crt_tbs, metrics, structural_validation_gate
 from gold_cio_v9.live.monte_carlo import monte_carlo_r
 
 
@@ -90,6 +90,13 @@ def main() -> int:
     else:
         result["monte_carlo"]={"status":"INSUFFICIENT_SAMPLE","sample_size":len(trades)}
 
+    result["structural_gate"]=structural_validation_gate(
+        metrics_full=result["metrics"],
+        metrics_cost_005=result["metrics_cost_stress_005r"],
+        metrics_holdout=result["holdout_metrics"],
+        monte_carlo=result["monte_carlo"],
+    )
+
     out=Path(args.output_dir)
     out.mkdir(parents=True,exist_ok=True)
     (out/"summary.json").write_text(json.dumps(result,indent=2,sort_keys=True)+"\n",encoding="utf-8")
@@ -115,6 +122,7 @@ def main() -> int:
         "resolved_trades":result["resolved_trades"],
         "metrics":result["metrics"],
         "holdout_metrics":result["holdout_metrics"],
+        "structural_gate":result["structural_gate"],
         "output_dir":str(out),
         "real_orders_allowed":False,
     },sort_keys=True))
