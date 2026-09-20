@@ -95,6 +95,29 @@ bool FindMidasPosition(const string symbol,const long magic,ulong &ticket)
    return false;
 }
 
+bool FindAnyPositionOnSymbol(const string symbol,ulong &ticket)
+{
+   ticket=0;
+   for(int i=PositionsTotal()-1;i>=0;i--)
+   {
+      ulong t=PositionGetTicket(i);
+      if(t==0 || !PositionSelectByTicket(t))
+         continue;
+      if(PositionGetString(POSITION_SYMBOL)==symbol)
+      {
+         ticket=t;
+         return true;
+      }
+   }
+   return false;
+}
+
+bool TradeResultAccepted()
+{
+   uint retcode=trade.ResultRetcode();
+   return (retcode==TRADE_RETCODE_DONE || retcode==TRADE_RETCODE_DONE_PARTIAL);
+}
+
 bool ReadCommand(
    string &schema,long &decision_id,string &symbol,string &action,
    double &volume,double &entry,double &sl,double &tp1,double &tp2,
@@ -193,7 +216,8 @@ void ManagePosition()
 
       trade.SetExpertMagicNumber((ulong)magic);
       trade.SetDeviationInPoints(InpDeviationPoints);
-      if(trade.PositionModify(ticket,entry,tp2))
+      bool modified=trade.PositionModify(ticket,entry,tp2);
+      if(modified && TradeResultAccepted())
          WriteStatus("MANAGED","STOP_MOVED_TO_BREAKEVEN",0,ticket);
       else
          WriteStatus("ERROR","BREAKEVEN_MODIFY_FAILED_"+IntegerToString((int)trade.ResultRetcode()),0,ticket);
@@ -262,6 +286,13 @@ void ProcessCommand()
       return;
    }
 
+   ulong any_position=0;
+   if(FindAnyPositionOnSymbol(symbol,any_position))
+   {
+      WriteStatus("BLOCKED","SYMBOL_POSITION_ALREADY_EXISTS",decision_id,any_position);
+      return;
+   }
+
    if(!SymbolSelect(symbol,true))
    {
       WriteStatus("BLOCKED","SYMBOL_SELECT_FAILED",decision_id);
@@ -319,7 +350,7 @@ void ProcessCommand()
    else
       sent=trade.Sell(safe_volume,symbol,0.0,sl,tp2,"MIDAS_V2_EA");
 
-   if(!sent)
+   if(!sent || !TradeResultAccepted())
    {
       WriteStatus("ERROR","ORDER_FAILED_"+IntegerToString((int)trade.ResultRetcode()),decision_id);
       return;
