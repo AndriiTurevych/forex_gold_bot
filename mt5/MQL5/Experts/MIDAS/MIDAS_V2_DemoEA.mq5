@@ -122,7 +122,7 @@ bool NewsExecutionAllowed(string &reason)
    datetime from=now-(InpNewsMinutesAfter*60);
    datetime to=now+(InpNewsMinutesBefore*60);
    ResetLastError();
-   int total=CalendarValueHistory(values,from,to,NULL,"USD");
+   int total=CalendarValueHistory(values,from,to,"","USD");
    if(total<0)
    {
       reason="ECONOMIC_CALENDAR_UNAVAILABLE_"+IntegerToString(GetLastError());
