@@ -19,6 +19,8 @@ $LogPath = Join-Path $ArtifactDir "bridge.log"
 $HealthPath = Join-Path $ArtifactDir "health.json"
 $HealthTemp = "$HealthPath.tmp"
 $DecisionPath = Join-Path $ArtifactDir "decision.json"
+$DemoScript = Join-Path $RepoRoot "scripts\run_midas_demo_execution.py"
+$DemoOutputPath = Join-Path $ArtifactDir "demo_execution.json"
 $DefaultIngestUrl = "https://jqmzpwkdbcuqnykhfmvc.supabase.co/functions/v1/ingest-mt5"
 
 New-Item -ItemType Directory -Path $ArtifactDir -Force | Out-Null
@@ -78,6 +80,10 @@ do {
         risk_approved = $false
         demo_execution_allowed = $false
         final_action = "ABSTAIN"
+        demo_execution_status = "DISABLED"
+        demo_execution_reason = "MIDAS_DEMO_EXECUTION_DISABLED"
+        demo_order_sent = $false
+        position_managed = $false
         real_orders_allowed = $false
     }
     try {
@@ -112,6 +118,26 @@ do {
         }
         else {
             throw "DECISION_ARTIFACT_MISSING"
+        }
+
+        $savedDemoEnabled = [Environment]::GetEnvironmentVariable("MIDAS_DEMO_EXECUTION_ENABLED", "User")
+        if (-not $env:MIDAS_DEMO_EXECUTION_ENABLED -and $savedDemoEnabled) {
+            $env:MIDAS_DEMO_EXECUTION_ENABLED = $savedDemoEnabled
+        }
+        $demoEnabled = -not [string]::IsNullOrWhiteSpace($env:MIDAS_DEMO_EXECUTION_ENABLED) -and
+            $env:MIDAS_DEMO_EXECUTION_ENABLED.Trim().ToLowerInvariant() -in @("1", "true", "yes", "on")
+        if ($demoEnabled) {
+            if (-not (Test-Path $DemoScript)) { throw "DEMO_EXECUTION_SCRIPT_NOT_FOUND:$DemoScript" }
+            $demoLines = @(& $Python $DemoScript --terminal-path $TerminalPath 2>&1 | ForEach-Object { "$_" })
+            $demoExit = $LASTEXITCODE
+            foreach ($line in $demoLines) { Add-Content -Path $LogPath -Value "[$attemptUtc] DEMO $line" -Encoding UTF8 }
+            if ($demoExit -ne 0) { throw "DEMO_EXECUTION_EXIT_$demoExit" }
+            if ($demoLines.Count -lt 1) { throw "DEMO_EXECUTION_NO_OUTPUT" }
+            $demoResult = $demoLines[-1] | ConvertFrom-Json
+            $health.demo_execution_status = [string]$demoResult.execution.status
+            $health.demo_execution_reason = [string]$demoResult.execution.reason
+            $health.demo_order_sent = [bool]$demoResult.execution.order_sent
+            $health.position_managed = [bool]$demoResult.management.position_managed
         }
 
         $lastSuccessUtc = [DateTime]::UtcNow.ToString("o")
