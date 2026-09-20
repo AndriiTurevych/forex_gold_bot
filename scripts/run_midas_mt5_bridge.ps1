@@ -77,6 +77,9 @@ do {
         signal_stored = $false
         ingest_url = $IngestUrl
         error = $null
+        strategy = "CRT_TBS"
+        setup_model = $null
+        confidence_score = 0
         ai_gate_status = $null
         ai_decision = $null
         ai_reason_code = $null
@@ -111,6 +114,9 @@ do {
         if (Test-Path $DecisionPath) {
             try {
                 $decision = Get-Content $DecisionPath -Raw | ConvertFrom-Json
+                $health.strategy = [string]$decision.strategy
+                $health.setup_model = [string]$decision.setup_model
+                $health.confidence_score = [int]$decision.confidence_score
                 $health.ai_gate_status = [string]$decision.ai_gate.status
                 $health.ai_decision = [string]$decision.ai_gate.decision
                 $health.ai_reason_code = [string]$decision.ai_gate.reason_code
