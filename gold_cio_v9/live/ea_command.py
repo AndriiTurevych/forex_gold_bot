@@ -1,9 +1,4 @@
-"""Publish one fail-closed MIDAS v2 command for the MT5 Expert Advisor.
-
-The command file is written to MetaTrader's Common/Files area. The EA is a
-separate optional execution backend and remains disabled unless explicitly
-enabled on both the Python publisher and the EA itself.
-"""
+"""Publish a fail-closed MIDAS v2 command/dashboard row for the MT5 EA."""
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -14,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 
-EA_COMMAND_SCHEMA = "MIDAS_V2_EA_1"
+EA_COMMAND_SCHEMA = "MIDAS_V2_EA_2"
 EA_COMMAND_RELATIVE_PATH = Path("MIDAS") / "midas_command.csv"
 
 
@@ -32,11 +27,15 @@ def _utc(value: str | None) -> datetime:
 
 
 def _decision_id(decision: dict[str, Any]) -> int:
-    material = "|".join(
-        str(decision.get(key) or "")
-        for key in ("symbol", "decision_time", "final_action", "entry", "stop", "tp2", "proposed_volume_lots")
-    )
-    # 52 bits: exactly representable in an MQL5 GlobalVariable double.
+    signal_id = str(decision.get("signal_id") or "").strip()
+    if signal_id:
+        material = f"{signal_id}|{decision.get('final_action') or 'ABSTAIN'}"
+    else:
+        material = "|".join(
+            str(decision.get(key) or "")
+            for key in ("symbol", "decision_time", "final_action", "entry", "stop", "tp2")
+        )
+    # 52 bits are exactly representable in an MQL5 GlobalVariable double.
     return int(sha256(material.encode("utf-8")).hexdigest()[:13], 16)
 
 
@@ -50,12 +49,26 @@ def _command(decision: dict[str, Any], *, ttl_seconds: int) -> dict[str, Any]:
     expires = max(datetime.now(timezone.utc), decision_time) + timedelta(seconds=ttl_seconds)
     risk = decision.get("risk_gate") or {}
     limits = risk.get("limits") or {}
+    ai = decision.get("ai_gate") or {}
 
     return {
         "schema": EA_COMMAND_SCHEMA,
         "decision_id": _decision_id(decision),
+        "signal_id": str(decision.get("signal_id") or ""),
         "symbol": str(decision.get("symbol") or "XAUUSD").upper(),
         "action": action,
+        "mode": str(ai.get("regime") or "UNKNOWN"),
+        "strategy": str(decision.get("strategy") or "CRT_TBS"),
+        "setup_model": str(decision.get("setup_model") or "WAIT"),
+        "h4_bias": str(decision.get("h4_bias") or "NEUTRAL"),
+        "h1_bias": str(decision.get("h1_bias") or "NEUTRAL"),
+        "setup": "ARMED" if decision.get("candidate_action") in {"BUY", "SELL"} else "WAIT",
+        "ai_gate": str(ai.get("decision") or "BLOCK"),
+        "risk_gate": "PASS" if bool(risk.get("approved")) else "BLOCK",
+        "confidence": int(decision.get("confidence_score") or 0),
+        "risk_pct": 100.0 * float(risk.get("effective_risk_fraction") or 0.0),
+        "rr": float(risk.get("rr_to_tp2") or 0.0),
+        "spread_points": float(risk.get("spread_points") or 0.0),
         "volume_lots": float(decision.get("proposed_volume_lots") or 0.0) if action != "ABSTAIN" else 0.0,
         "entry": float(decision.get("entry") or 0.0) if action != "ABSTAIN" else 0.0,
         "stop": float(decision.get("stop") or 0.0) if action != "ABSTAIN" else 0.0,
@@ -79,6 +92,7 @@ def publish_ea_command(
 ) -> dict[str, Any]:
     if not _enabled():
         return {"published": False, "reason": "MIDAS_EA_COMMAND_DISABLED", "real_orders_allowed": False}
+
     python_executor_enabled = os.environ.get("MIDAS_DEMO_EXECUTION_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
     if python_executor_enabled:
         raise RuntimeError("EXECUTION_BACKEND_CONFLICT:EA_AND_PYTHON_DEMO_BOTH_ENABLED")
@@ -106,11 +120,7 @@ def publish_ea_command(
         target = Path(common) / "Files" / EA_COMMAND_RELATIVE_PATH
         target.parent.mkdir(parents=True, exist_ok=True)
         temporary = target.with_suffix(target.suffix + ".tmp")
-        fields = [
-            "schema", "decision_id", "symbol", "action", "volume_lots", "entry", "stop",
-            "tp1", "tp2", "max_spread_points", "max_entry_drift_points",
-            "expires_epoch", "magic", "real_orders_allowed",
-        ]
+        fields = list(command.keys())
         with temporary.open("w", encoding="ascii", newline="") as handle:
             writer = csv.DictWriter(handle, fieldnames=fields, delimiter=";")
             writer.writeheader()
@@ -119,8 +129,12 @@ def publish_ea_command(
         return {
             "published": True,
             "path": str(target),
+            "schema": command["schema"],
             "decision_id": command["decision_id"],
+            "signal_id": command["signal_id"],
             "action": command["action"],
+            "ai_gate": command["ai_gate"],
+            "risk_gate": command["risk_gate"],
             "expires_epoch": command["expires_epoch"],
             "real_orders_allowed": False,
         }
