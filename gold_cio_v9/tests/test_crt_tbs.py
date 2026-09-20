@@ -21,7 +21,7 @@ def test_h1_m5_long_failed_breakout_is_detected():
     rows = [(101.5, 102.0, 101.0, 101.6)] * 15
     rows += [(100.4, 101.2, 99.7, 101.0)]
     m5 = _bars(start + timedelta(hours=2), 5, rows)
-    m15 = _bars(start, 15, [(100, 101, 99.8, 100.5)] * 16)
+    m15 = _bars(start, 15, [(101.0, 102.0, 100.2, 101.5)] * 16)
     h4 = _bars(start - timedelta(hours=8), 240, [(99, 105, 98, 103), (103, 106, 100, 104)])
 
     result = detect_crt_tbs(h4=h4, h1=h1, m15=m15, m5=m5, min_rr_tp2=1.0)
