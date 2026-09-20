@@ -16,6 +16,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from gold_cio_v9.data.mt5_snapshot import validate_snapshot
+from gold_cio_v9.live.decision_pipeline import build_decision
 from gold_cio_v9.live.mt5_analysis import analyze_snapshot
 from scripts.collect_mt5_xauusd import collect
 
@@ -78,6 +79,15 @@ def main() -> int:
     analysis = analyze_snapshot(snapshot, shadow_equity=shadow_equity)
     _atomic_json(output.with_name("analysis.json"), analysis)
 
+    # MIDAS v2 control plane. This creates a local shadow/demo decision artifact
+    # while preserving the existing ingest payload contract below.
+    decision = build_decision(
+        snapshot,
+        analysis=analysis,
+        shadow_equity=shadow_equity,
+    )
+    _atomic_json(output.with_name("decision.json"), decision)
+
     body = json.dumps(
         {"snapshot": snapshot, "preflight": preflight, "analysis": analysis},
         separators=(",", ":"),
@@ -90,7 +100,7 @@ def main() -> int:
         headers={
             "content-type": "application/json",
             "x-midas-ingest-token": token,
-            "user-agent": "midas-mt5-bridge/1",
+            "user-agent": "midas-mt5-bridge/2",
         },
     )
     try:
