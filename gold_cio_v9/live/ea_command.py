@@ -79,6 +79,9 @@ def publish_ea_command(
 ) -> dict[str, Any]:
     if not _enabled():
         return {"published": False, "reason": "MIDAS_EA_COMMAND_DISABLED", "real_orders_allowed": False}
+    python_executor_enabled = os.environ.get("MIDAS_DEMO_EXECUTION_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
+    if python_executor_enabled:
+        raise RuntimeError("EXECUTION_BACKEND_CONFLICT:EA_AND_PYTHON_DEMO_BOTH_ENABLED")
 
     ttl_seconds = ttl_seconds or int(os.environ.get("MIDAS_EA_COMMAND_TTL_SECONDS", "90"))
     if ttl_seconds < 15 or ttl_seconds > 600:
