@@ -1,0 +1,125 @@
+#!/usr/bin/env python3
+"""Fail-closed readiness check for MIDAS v2 on the Windows MT5 host."""
+from __future__ import annotations
+
+import argparse
+import csv
+from datetime import datetime, timezone
+import json
+import os
+from pathlib import Path
+
+
+def _enabled(name: str) -> bool:
+    return os.environ.get(name, "0").strip().lower() in {"1","true","yes","on"}
+
+
+def _status_file(path: Path) -> dict:
+    if not path.exists():
+        return {"exists":False,"fresh":False,"state":None}
+    try:
+        with path.open("r",encoding="ascii",newline="") as h:
+            rows=list(csv.DictReader(h,delimiter=";"))
+        if not rows:
+            return {"exists":True,"fresh":False,"state":None}
+        row=rows[-1]
+        event_time=datetime.fromtimestamp(int(float(row["time"])),tz=timezone.utc)
+        age=(datetime.now(timezone.utc)-event_time).total_seconds()
+        return {"exists":True,"fresh":0<=age<=180,"state":row.get("state"),"age_seconds":round(age,1)}
+    except Exception as exc:
+        return {"exists":True,"fresh":False,"state":None,"error":type(exc).__name__}
+
+
+def main() -> int:
+    p=argparse.ArgumentParser()
+    p.add_argument("--terminal-path",required=True)
+    p.add_argument("--symbol",default="XAUUSD")
+    p.add_argument("--require-demo",action="store_true")
+    p.add_argument("--mt5-timeout-ms",type=int,default=10000)
+    args=p.parse_args()
+
+    try:
+        import MetaTrader5 as mt5
+    except ImportError as exc:
+        raise RuntimeError("MetaTrader5 package is required") from exc
+
+    terminal_path=Path(args.terminal_path)
+    checks={}
+    initialized=mt5.initialize(path=str(terminal_path),timeout=args.mt5_timeout_ms)
+    checks["mt5_initialize"]=bool(initialized)
+    if not initialized:
+        print(json.dumps({"ready_for_shadow":False,"ready_for_demo_ea":False,"checks":checks,"error":str(mt5.last_error())},sort_keys=True))
+        return 1
+
+    try:
+        terminal=mt5.terminal_info()
+        account=mt5.account_info()
+        info=mt5.symbol_info(args.symbol)
+        tick=mt5.symbol_info_tick(args.symbol)
+
+        checks["terminal_connected"]=bool(terminal and getattr(terminal,"connected",False))
+        checks["account_available"]=account is not None
+        checks["symbol_available"]=info is not None and tick is not None
+        checks["tick_economics"]=bool(
+            info and float(getattr(info,"trade_tick_size",0) or 0)>0
+            and float(getattr(info,"trade_tick_value_loss",getattr(info,"trade_tick_value",0)) or 0)>0
+        )
+
+        demo_mode=int(getattr(mt5,"ACCOUNT_TRADE_MODE_DEMO",0))
+        trade_mode=int(getattr(account,"trade_mode",-1)) if account else -1
+        checks["demo_account"]=trade_mode==demo_mode
+        checks["account_trade_allowed"]=bool(account and getattr(account,"trade_allowed",False))
+        checks["account_expert_allowed"]=bool(account and getattr(account,"trade_expert",False))
+        checks["terminal_trade_allowed"]=bool(terminal and getattr(terminal,"trade_allowed",False))
+
+        data_path=Path(str(getattr(terminal,"data_path","") or "")) if terminal else Path()
+        common=Path(str(getattr(terminal,"commondata_path","") or "")) if terminal else Path()
+        ex5=data_path/"MQL5"/"Experts"/"MIDAS"/"MIDAS_V2_DemoEA.ex5"
+        template=data_path/"Profiles"/"Templates"/"MIDAS_V2_XAUUSD.tpl"
+        status=common/"Files"/"MIDAS"/"midas_ea_status.csv"
+        command=common/"Files"/"MIDAS"/"midas_command.csv"
+
+        checks["ea_compiled"]=ex5.exists()
+        checks["safe_template_exists"]=template.exists()
+        checks["ea_command_file_exists"]=command.exists()
+        checks["ea_status"]=_status_file(status)
+
+        checks["ingest_token"]=bool(os.environ.get("MIDAS_INGEST_TOKEN","").strip() or os.environ.get("MIDAS_INGEST_TOKEN_USER","").strip())
+        checks["openai_key"]=bool(os.environ.get("OPENAI_API_KEY","").strip() or os.environ.get("MIDAS_OPENAI_API_KEY","").strip())
+        checks["ai_gate_enabled"]=_enabled("MIDAS_AI_GATE_ENABLED")
+        checks["ea_command_enabled"]=_enabled("MIDAS_EA_COMMAND_ENABLED")
+        checks["python_demo_enabled"]=_enabled("MIDAS_DEMO_EXECUTION_ENABLED")
+        checks["execution_backend_conflict"]=checks["ea_command_enabled"] and checks["python_demo_enabled"]
+
+        shadow_required=[
+            checks["terminal_connected"],checks["account_available"],checks["symbol_available"],
+            checks["tick_economics"],checks["ingest_token"],checks["openai_key"],
+            checks["ai_gate_enabled"],not checks["execution_backend_conflict"],
+        ]
+        ready_shadow=all(shadow_required)
+
+        demo_required=[
+            ready_shadow,checks["demo_account"],checks["account_trade_allowed"],
+            checks["account_expert_allowed"],checks["terminal_trade_allowed"],
+            checks["ea_compiled"],checks["ea_command_enabled"],
+            bool(checks["ea_status"].get("fresh")),
+        ]
+        if args.require_demo:
+            demo_required.append(checks["demo_account"])
+        ready_demo=all(demo_required)
+
+        result={
+            "schema":"midas-v2-preflight-v1",
+            "ready_for_shadow":ready_shadow,
+            "ready_for_demo_ea":ready_demo,
+            "checks":checks,
+            "real_orders_allowed":False,
+        }
+        print(json.dumps(result,sort_keys=True))
+        return 0 if (ready_demo if args.require_demo else ready_shadow) else 1
+    finally:
+        mt5.shutdown()
+
+
+if __name__=="__main__":
+    raise SystemExit(main())
