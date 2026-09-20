@@ -17,6 +17,7 @@ if str(ROOT) not in sys.path:
 
 from gold_cio_v9.data.mt5_snapshot import validate_snapshot
 from gold_cio_v9.live.decision_pipeline import build_decision
+from gold_cio_v9.live.ea_command import publish_ea_command
 from gold_cio_v9.live.mt5_analysis import analyze_snapshot
 from scripts.collect_mt5_xauusd import collect
 
@@ -87,6 +88,14 @@ def main() -> int:
         shadow_equity=shadow_equity,
     )
     _atomic_json(output.with_name("decision.json"), decision)
+
+    ea_command = publish_ea_command(
+        mt5,
+        decision,
+        terminal_path=args.terminal_path,
+        mt5_timeout_ms=args.mt5_timeout_ms,
+    )
+    _atomic_json(output.with_name("ea_command.json"), ea_command)
 
     body = json.dumps(
         {"snapshot": snapshot, "preflight": preflight, "analysis": analysis},
