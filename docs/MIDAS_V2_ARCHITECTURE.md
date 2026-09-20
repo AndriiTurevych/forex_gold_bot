@@ -28,11 +28,15 @@ The model is not an order generator. It only evaluates a candidate already creat
 - MIDAS_MAX_DAILY_LOSS_FRACTION defaults to 0.01.
 - MIDAS_MAX_CONSECUTIVE_LOSSES defaults to 3.
 - MIDAS_MAX_OPEN_POSITIONS defaults to 1.
+- MIDAS_DEMO_EXECUTION_ENABLED defaults to 0 and must be explicitly set to 1.
+- MIDAS_MAX_ENTRY_DRIFT_POINTS defaults to 50.
+- MIDAS_MT5_DEVIATION_POINTS defaults to 30.
+- MIDAS_MT5_MAGIC defaults to 56002026.
 
 ## Rollout gates
 
 Phase 1: shadow decisions only. Compare deterministic candidate, AI decision, risk decision, and realized outcome.
 
-Phase 2: demo execution only after sufficient forward observations and operational stability. Position protection remains local even if the AI/API is unavailable.
+Phase 2: demo execution only. The executor hard-checks MT5 ACCOUNT_TRADE_MODE_DEMO, prevents duplicate decisions and duplicate MIDAS positions, places broker-side SL/TP2, and moves SL to breakeven after TP1. Position protection remains local even if the AI/API is unavailable.
 
 Phase 3: real execution is not enabled by this branch. It requires a separate explicit release gate, broker/account preflight, kill switch, and validated drawdown/operational criteria.
