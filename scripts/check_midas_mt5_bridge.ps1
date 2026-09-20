@@ -53,6 +53,10 @@ $ok = [bool]$health.ok -and $fresh -and $taskHealthy
     risk_approved = [bool]$health.risk_approved
     demo_execution_allowed = [bool]$health.demo_execution_allowed
     final_action = $health.final_action
+    demo_execution_status = $health.demo_execution_status
+    demo_execution_reason = $health.demo_execution_reason
+    demo_order_sent = [bool]$health.demo_order_sent
+    position_managed = [bool]$health.position_managed
     error = $health.error
     real_orders_allowed = $false
 } | ConvertTo-Json -Compress
