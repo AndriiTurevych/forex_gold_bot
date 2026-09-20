@@ -58,10 +58,9 @@ def collect_account_state(
         midas_positions = [p for p in positions if int(getattr(p, "magic", -1)) == magic]
 
         now_utc = datetime.now(timezone.utc)
-        offset = timedelta(hours=server_utc_offset_hours)
-        broker_now = now_utc + offset
-        broker_start = broker_now.replace(hour=0, minute=0, second=0, microsecond=0)
-        start_utc = broker_start - offset
+        # Risk day is intentionally UTC. MT5 Python history timestamps are UTC,
+        # and this avoids broker-DST ambiguity in the deterministic loss gate.
+        start_utc = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
 
         deals = tuple(mt5.history_deals_get(start_utc, now_utc) or ())
         closing_entries = {
