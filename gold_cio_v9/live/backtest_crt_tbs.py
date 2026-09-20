@@ -160,7 +160,7 @@ def _simulate_one(
             if not be_active:
                 # Worst-case ordering for an ambiguous bar: adverse stop first.
                 if low<=stop:
-                    exit_price=stop
+                    exit_price=min(stop,bar.open)
                     reason="SL"
                     r=(exit_price-entry)/risk
                     return {"exit_index":i,"exit_time":bar.time.isoformat(),"exit_price":exit_price,"exit_reason":reason,"r_multiple":r}
@@ -174,7 +174,8 @@ def _simulate_one(
                     be_active=True
             else:
                 if low<=entry:
-                    return {"exit_index":i,"exit_time":bar.time.isoformat(),"exit_price":entry,"exit_reason":"BE","r_multiple":0.0}
+                    exit_price=min(entry,bar.open)
+                    return {"exit_index":i,"exit_time":bar.time.isoformat(),"exit_price":exit_price,"exit_reason":"BE","r_multiple":(exit_price-entry)/risk}
                 if high>=tp2:
                     return {"exit_index":i,"exit_time":bar.time.isoformat(),"exit_price":tp2,"exit_reason":"TP2","r_multiple":(tp2-entry)/risk}
         else:
@@ -183,7 +184,8 @@ def _simulate_one(
             low,high=bar.low+spread,bar.high+spread
             if not be_active:
                 if high>=stop:
-                    exit_price=stop
+                    ask_open=bar.open+spread
+                    exit_price=max(stop,ask_open)
                     return {"exit_index":i,"exit_time":bar.time.isoformat(),"exit_price":exit_price,"exit_reason":"SL","r_multiple":(entry-exit_price)/risk}
                 if low<=tp1:
                     if high>=entry:
@@ -193,7 +195,9 @@ def _simulate_one(
                     be_active=True
             else:
                 if high>=entry:
-                    return {"exit_index":i,"exit_time":bar.time.isoformat(),"exit_price":entry,"exit_reason":"BE","r_multiple":0.0}
+                    ask_open=bar.open+spread
+                    exit_price=max(entry,ask_open)
+                    return {"exit_index":i,"exit_time":bar.time.isoformat(),"exit_price":exit_price,"exit_reason":"BE","r_multiple":(entry-exit_price)/risk}
                 if low<=tp2:
                     return {"exit_index":i,"exit_time":bar.time.isoformat(),"exit_price":tp2,"exit_reason":"TP2","r_multiple":(entry-tp2)/risk}
     return None
@@ -298,4 +302,55 @@ def metrics(trades: list[dict[str,Any]], *, cost_stress_r: float=0.0) -> dict[st
         "loss_rate":len(losses)/len(values),
         "be_rate":len(bes)/len(values),
         "cost_stress_r":cost_stress_r,
+    }
+
+
+def structural_validation_gate(
+    *,
+    metrics_full: dict[str,Any],
+    metrics_cost_005: dict[str,Any],
+    metrics_holdout: dict[str,Any],
+    monte_carlo: dict[str,Any],
+    minimum_trades: int=200,
+    minimum_holdout: int=40,
+) -> dict[str,Any]:
+    """Pre-registered structural evidence gate for DEMO progression only."""
+    reasons=[]
+    if int(metrics_full.get("count") or 0)<minimum_trades:
+        reasons.append("MINIMUM_BACKTEST_TRADES_NOT_REACHED")
+    if float(metrics_full.get("mean_r") or 0.0)<=0:
+        reasons.append("BACKTEST_EXPECTANCY_NOT_POSITIVE")
+    pf=metrics_full.get("profit_factor")
+    if pf is None or float(pf)<1.30:
+        reasons.append("BACKTEST_PROFIT_FACTOR_BELOW_1_30")
+    if float(metrics_cost_005.get("mean_r") or 0.0)<=0:
+        reasons.append("BACKTEST_COST_STRESS_NOT_POSITIVE")
+    if int(metrics_holdout.get("count") or 0)<minimum_holdout:
+        reasons.append("HOLDOUT_SAMPLE_TOO_SMALL")
+    if float(metrics_holdout.get("mean_r") or 0.0)<=0:
+        reasons.append("HOLDOUT_EXPECTANCY_NOT_POSITIVE")
+    hpf=metrics_holdout.get("profit_factor")
+    if hpf is None or float(hpf)<1.30:
+        reasons.append("HOLDOUT_PROFIT_FACTOR_BELOW_1_30")
+    if monte_carlo.get("status")=="INSUFFICIENT_SAMPLE":
+        reasons.append("MONTE_CARLO_INSUFFICIENT_SAMPLE")
+    else:
+        if float(monte_carlo.get("p05_final_return") or -1.0)<=0:
+            reasons.append("MONTE_CARLO_P05_NOT_POSITIVE")
+        if float(monte_carlo.get("p95_max_drawdown") or 1.0)>0.10:
+            reasons.append("MONTE_CARLO_P95_DRAWDOWN_ABOVE_10PCT")
+    return {
+        "schema":"midas-crt-tbs-structural-gate-v1",
+        "structural_backtest_passed":not reasons,
+        "minimum_trades":minimum_trades,
+        "minimum_holdout":minimum_holdout,
+        "reasons":reasons or ["STRUCTURAL_BACKTEST_GATE_PASSED"],
+        "demo_execution_release_allowed":not reasons,
+        "live_release_allowed":False,
+        "real_orders_allowed":False,
+        "limitations":[
+            "HISTORICAL_GPT_GATE_NOT_RECONSTRUCTED",
+            "HISTORICAL_MT5_ECONOMIC_CALENDAR_VETO_NOT_RECONSTRUCTED",
+            "DEMO_FORWARD_VALIDATION_STILL_REQUIRED_FOR_STRATEGY_VALIDATION",
+        ],
     }
