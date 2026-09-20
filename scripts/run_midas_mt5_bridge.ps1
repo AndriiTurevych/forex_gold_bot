@@ -20,6 +20,8 @@ $HealthPath = Join-Path $ArtifactDir "health.json"
 $HealthTemp = "$HealthPath.tmp"
 $DecisionPath = Join-Path $ArtifactDir "decision.json"
 $EACommandArtifactPath = Join-Path $ArtifactDir "ea_command.json"
+$ForwardScript = Join-Path $RepoRoot "scripts\collect_midas_forward_results.py"
+$ForwardOutput = Join-Path $ArtifactDir "resolved_trades.csv"
 $DemoScript = Join-Path $RepoRoot "scripts\run_midas_demo_execution.py"
 $DemoOutputPath = Join-Path $ArtifactDir "demo_execution.json"
 $DefaultIngestUrl = "https://jqmzpwkdbcuqnykhfmvc.supabase.co/functions/v1/ingest-mt5"
@@ -87,6 +89,7 @@ do {
         demo_execution_reason = "MIDAS_DEMO_EXECUTION_DISABLED"
         demo_order_sent = $false
         position_managed = $false
+        resolved_trades = 0
         real_orders_allowed = $false
     }
     try {
@@ -133,6 +136,17 @@ do {
             }
             catch {
                 throw "EA_COMMAND_ARTIFACT_INVALID:$($_.Exception.Message)"
+            }
+        }
+
+        if (Test-Path $ForwardScript) {
+            $forwardLines = @(& $Python $ForwardScript --terminal-path $TerminalPath --output $ForwardOutput 2>&1 | ForEach-Object { "$_" })
+            $forwardExit = $LASTEXITCODE
+            foreach ($line in $forwardLines) { Add-Content -Path $LogPath -Value "[$attemptUtc] FORWARD $line" -Encoding UTF8 }
+            if ($forwardExit -ne 0) { throw "FORWARD_RESULTS_EXIT_$forwardExit" }
+            if ($forwardLines.Count -ge 1) {
+                $forwardResult = $forwardLines[-1] | ConvertFrom-Json
+                $health.resolved_trades = [int]$forwardResult.resolved_trades
             }
         }
 
