@@ -5,8 +5,16 @@ from gold_cio_v9.live.ea_command import _command, _decision_id, publish_ea_comma
 
 def _decision(approved=True):
     return {
+        "strategy": "CRT_TBS",
+        "signal_id": "CRT-test-signal",
+        "setup_model": "H1_M5",
         "symbol": "XAUUSD",
         "decision_time": "2026-09-20T09:00:00+00:00",
+        "candidate_action": "BUY",
+        "h1_bias": "LONG",
+        "h4_bias": "LONG",
+        "confidence_score": 82,
+        "risk_fraction": 0.0025,
         "final_action": "BUY" if approved else "ABSTAIN",
         "entry": 4300.20,
         "stop": 4298.20,
@@ -15,7 +23,14 @@ def _decision(approved=True):
         "proposed_volume_lots": 0.10,
         "demo_execution_allowed": approved,
         "real_orders_allowed": False,
-        "risk_gate": {"limits": {"max_spread_points": 80.0}},
+        "ai_gate": {"decision": "ALLOW", "regime": "TREND"},
+        "risk_gate": {
+            "approved": approved,
+            "effective_risk_fraction": 0.0025 if approved else 0.0,
+            "rr_to_tp2": 2.0,
+            "spread_points": 20.0,
+            "limits": {"max_spread_points": 80.0},
+        },
     }
 
 
@@ -65,7 +80,7 @@ def test_publish_writes_common_file(monkeypatch, tmp_path):
     target = tmp_path / "Files" / "MIDAS" / "midas_command.csv"
     assert target.exists()
     text = target.read_text(encoding="ascii")
-    assert "MIDAS_V2_EA_1" in text
+    assert "MIDAS_V2_EA_2" in text
     assert ";BUY;" in text
 
 
@@ -78,3 +93,9 @@ def test_publish_blocks_dual_execution_backends(monkeypatch, tmp_path):
         assert "EXECUTION_BACKEND_CONFLICT" in str(exc)
     else:
         raise AssertionError("dual execution backends must be rejected")
+
+
+def test_decision_id_is_stable_across_quote_updates_for_same_signal():
+    first = _decision()
+    second = {**first, "decision_time": "2026-09-20T09:00:30+00:00", "entry": 4300.25}
+    assert _decision_id(first) == _decision_id(second)
