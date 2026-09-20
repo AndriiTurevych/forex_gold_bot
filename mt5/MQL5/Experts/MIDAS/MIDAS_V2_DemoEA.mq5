@@ -12,6 +12,9 @@ input string InpEventFile                = "MIDAS\\midas_ea_events.csv";
 input int    InpPollSeconds              = 1;
 input int    InpDeviationPoints          = 30;
 input bool   InpMoveToBreakevenAtTP1     = true;
+input bool   InpUseEconomicCalendarLock   = true;
+input int    InpNewsMinutesBefore         = 30;
+input int    InpNewsMinutesAfter          = 15;
 input bool   InpApplyCockpitStyle        = true;
 input bool   InpShowCockpit              = true;
 input bool   InpSaveSafeTemplateOnInit   = true;
@@ -98,6 +101,48 @@ bool DemoAccountAllowed(string &reason)
       return false;
    }
    reason="OK";
+   return true;
+}
+
+
+bool NewsExecutionAllowed(string &reason)
+{
+   if(!InpUseEconomicCalendarLock)
+   {
+      reason="NEWS_LOCK_DISABLED";
+      return true;
+   }
+   datetime now=TimeTradeServer();
+   if(now<=0)
+   {
+      reason="TRADE_SERVER_TIME_UNAVAILABLE";
+      return false;
+   }
+   MqlCalendarValue values[];
+   datetime from=now-(InpNewsMinutesAfter*60);
+   datetime to=now+(InpNewsMinutesBefore*60);
+   ResetLastError();
+   int total=CalendarValueHistory(values,from,to,NULL,"USD");
+   if(total<0)
+   {
+      reason="ECONOMIC_CALENDAR_UNAVAILABLE_"+IntegerToString(GetLastError());
+      return false;
+   }
+   for(int i=0;i<total;i++)
+   {
+      MqlCalendarEvent event;
+      if(!CalendarEventById(values[i].event_id,event))
+      {
+         reason="ECONOMIC_CALENDAR_EVENT_LOOKUP_FAILED";
+         return false;
+      }
+      if(event.importance==CALENDAR_IMPORTANCE_HIGH)
+      {
+         reason="HIGH_IMPACT_USD_EVENT_LOCK";
+         return false;
+      }
+   }
+   reason="NEWS_CLEAR";
    return true;
 }
 
@@ -413,6 +458,9 @@ void ProcessCommand(const MidasCommand &c)
    if(c.expires_epoch<(long)TimeCurrent()){ WriteStatus("SKIPPED","COMMAND_EXPIRED",c.decision_id); return; }
    if(c.action=="ABSTAIN"){ WriteStatus("WAIT","ABSTAIN",c.decision_id); return; }
    if(c.action!="BUY" && c.action!="SELL"){ WriteStatus("BLOCKED","INVALID_ACTION",c.decision_id); return; }
+
+   string news_reason;
+   if(!NewsExecutionAllowed(news_reason)){ WriteStatus("BLOCKED",news_reason,c.decision_id); return; }
 
    string reason;
    if(!DemoAccountAllowed(reason)){ WriteStatus("BLOCKED",reason,c.decision_id); return; }
