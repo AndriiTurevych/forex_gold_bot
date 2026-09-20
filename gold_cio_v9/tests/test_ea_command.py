@@ -67,3 +67,14 @@ def test_publish_writes_common_file(monkeypatch, tmp_path):
     text = target.read_text(encoding="ascii")
     assert "MIDAS_V2_EA_1" in text
     assert ";BUY;" in text
+
+
+def test_publish_blocks_dual_execution_backends(monkeypatch, tmp_path):
+    monkeypatch.setenv("MIDAS_EA_COMMAND_ENABLED", "1")
+    monkeypatch.setenv("MIDAS_DEMO_EXECUTION_ENABLED", "1")
+    try:
+        publish_ea_command(FakeMT5(tmp_path), _decision(), terminal_path=None)
+    except RuntimeError as exc:
+        assert "EXECUTION_BACKEND_CONFLICT" in str(exc)
+    else:
+        raise AssertionError("dual execution backends must be rejected")
